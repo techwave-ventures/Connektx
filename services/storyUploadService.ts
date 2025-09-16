@@ -1,6 +1,6 @@
 import { compressStoryImage } from '@/utils/mediaCompression';
 
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 export interface StoryUploadResult {
   success: boolean;

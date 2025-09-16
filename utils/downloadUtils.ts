@@ -10,7 +10,7 @@ try {
 } catch (error) {
 }
 
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 export async function requestStoragePermission() {
   if (Platform.OS !== 'android') return true;

@@ -4,6 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as CommunityAPI from '../api/community';
 import { safeSplit } from '../utils/safeSplit';
 import { useAuthStore } from './auth-store';
+import { Aperture } from 'lucide-react-native';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 // Helper functions for safe data processing
 const ensureArray = (value: any): string[] => {
@@ -1158,7 +1161,7 @@ export const useCommunityStore = create<CommunityState>()(
           
           const endpoints = [
             // Try the general post like endpoint first (most likely to work)
-            () => fetch(`https://social-backend-y1rg.onrender.com/post/like`, {
+            () => fetch(`${API_BASE_URL}/post/like`, {
               method: 'POST',
               headers: { 'token': token, 'Content-Type': 'application/json' },
               body: JSON.stringify({ postId })
@@ -1171,7 +1174,7 @@ export const useCommunityStore = create<CommunityState>()(
             // Community-specific endpoint (original)
             () => CommunityAPI.likeCommunityPost(token, postId),
             // Alternative community endpoints
-            () => fetch(`https://social-backend-y1rg.onrender.com/community/post/${postId}/like`, {
+            () => fetch(`${API_BASE_URL}/community/post/${postId}/like`, {
               method: 'POST',
               headers: { 'token': token, 'Content-Type': 'application/json' }
             }).then(async r => {

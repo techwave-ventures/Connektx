@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 // Define the shape of a single notification object from the backend
 export interface Notification {

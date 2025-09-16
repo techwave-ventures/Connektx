@@ -17,7 +17,7 @@ interface SearchState {
   clearResults: () => void;
 }
 
-const BASE_URL = "https://social-backend-y1rg.onrender.com"
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://social-backend-y1rg.onrender.com"
 
 export const useSearchStore = create<SearchState>()(
   devtools((set) => ({

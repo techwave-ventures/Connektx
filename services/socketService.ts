@@ -93,7 +93,7 @@
 import { io, Socket } from 'socket.io-client';
 
 // Your backend URL
-const SOCKET_URL = 'https://social-backend-y1rg.onrender.com';
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 class SocketService {
     // The single socket instance for the entire application

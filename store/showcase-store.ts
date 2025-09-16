@@ -1,4 +1,4 @@
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';

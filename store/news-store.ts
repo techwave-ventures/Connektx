@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NewsArticle } from '@/types';
 import { useAuthStore } from './auth-store';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
+
 // Mock data
 const mockArticles: NewsArticle[] = [];
 
@@ -44,7 +46,7 @@ export const useNewsStore = create<NewsState>()(
           const token = useAuthStore.getState().token;
 
           const res = await fetch(
-            `https://social-backend-y1rg.onrender.com/news?category=${category.toLowerCase()}&limit=${limit}&offset=${offset}`,
+            `${API_BASE_URL}/news?category=${category.toLowerCase()}&limit=${limit}&offset=${offset}`,
             {
               headers: {
                 'token': `${token}`,
@@ -126,7 +128,7 @@ export const useNewsStore = create<NewsState>()(
         const token = useAuthStore.getState().token;
         const { setUpdatedArticleSave } = get(); 
         try {
-          const res = await fetch(`https://social-backend-y1rg.onrender.com/news/save/${articleId}`, {
+          const res = await fetch(`${API_BASE_URL}/news/save/${articleId}`, {
             method: 'POST',
             headers: {
               token: `${token}`
@@ -172,7 +174,7 @@ export const useNewsStore = create<NewsState>()(
         const token = useAuthStore.getState().token;
         const { setUpdatedArticle } = get(); 
         try {
-          const res = await fetch(`https://social-backend-y1rg.onrender.com/news/like/${articleId}`, {
+          const res = await fetch(`${API_BASE_URL}/news/like/${articleId}`, {
             method: 'POST',
             headers: {
               token: `${token}`
@@ -209,7 +211,7 @@ export const useNewsStore = create<NewsState>()(
       getBookmarkedArticles: async() => {
         try {
           const token = useAuthStore.getState().token;
-          const response = await fetch("https://social-backend-y1rg.onrender.com/news/saved",{
+          const response = await fetch(`${API_BASE_URL}/news/saved`,{
             headers: {
               token: `${token}`
             }

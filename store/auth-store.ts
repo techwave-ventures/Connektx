@@ -9,6 +9,8 @@ import { mapUserFromApi } from '@/utils/mapUserFromApi';
 import { registerForPushNotificationsAsync } from '@/services/push-notification.service';
 import { socketService } from '@/services/socketService';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -67,7 +69,7 @@ export const useAuthStore = create<AuthState>()(
           const requestBody = { email: cleanEmail, password: cleanPassword };
           //console.log('1. [Request] Sending login credentials:', requestBody.email);
 
-          const response = await fetch('https://social-backend-y1rg.onrender.com/auth/login', {
+          const response = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
@@ -153,7 +155,7 @@ export const useAuthStore = create<AuthState>()(
           
           // console.log('Request body:', JSON.stringify(requestBody, null, 2));
           
-          const response = await fetch('https://social-backend-y1rg.onrender.com/auth/signup', {
+          const response = await fetch(`${API_BASE_URL}/auth/signup`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

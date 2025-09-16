@@ -29,6 +29,8 @@ import Colors from '@/constants/colors';
 
 type Step = 'email' | 'otp' | 'reset';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
+
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   
@@ -120,7 +122,7 @@ export default function ForgotPasswordScreen() {
     
     setIsLoading(true);
     try {
-      const response = await fetch('https://social-backend-y1rg.onrender.com/user/forgotPassword', {
+      const response = await fetch(`${API_BASE_URL}/user/forgotPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -157,7 +159,7 @@ export default function ForgotPasswordScreen() {
     try {
       const otpString = otp.join('');
 
-      const response = await fetch('https://social-backend-y1rg.onrender.com/user/verifyForgotPassword', {
+      const response = await fetch(`${API_BASE_URL}/user/verifyForgotPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -216,7 +218,7 @@ export default function ForgotPasswordScreen() {
       
      
       
-      const response = await fetch('https://social-backend-y1rg.onrender.com/user/changePassword', {
+      const response = await fetch(`${API_BASE_URL}/user/changePassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -252,7 +254,7 @@ export default function ForgotPasswordScreen() {
     
     setIsLoading(true);
     try {
-      const response = await fetch('https://social-backend-y1rg.onrender.com/user/forgotPassword', {
+      const response = await fetch(`${API_BASE_URL}/user/forgotPassword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

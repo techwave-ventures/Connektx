@@ -24,6 +24,7 @@ import * as FileSystem from 'expo-file-system';
 // Alternative approach - no react-native-view-shot dependency
 
 const { width, height } = Dimensions.get('window');
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 const editingTools = [
     { id: 'back', icon: 'chevron-back', name: 'Back' },
@@ -384,7 +385,7 @@ const StoryEditorScreen: React.FC<StoryEditorScreenProps> = ({
 
             setUploadProgress(60);
             
-            const response = await fetch(`https://social-backend-y1rg.onrender.com/user/upload/story`, {
+            const response = await fetch(`${API_BASE_URL}/user/upload/story`, {
                 method: 'POST',
                 headers: {
                     'token': token,

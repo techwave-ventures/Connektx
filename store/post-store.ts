@@ -4,7 +4,7 @@ import { useAuthStore } from './auth-store';
 import { mapStoriesFromApi } from '../utils/mapStoryFromApi';
 import * as PostAPI from '../api/post';
 
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 interface PostState {
   posts: Post[];
@@ -449,7 +449,7 @@ fetchStories: async () => {
     set({ isLoading: true, error: null });
     try {
       // Fetch user's own stories
-      const userStoriesResponse = await fetch(`https://social-backend-y1rg.onrender.com/user/story/self`, {
+      const userStoriesResponse = await fetch(`${API_BASE}/user/story/self`, {
         method: 'GET',
         headers: {
           token: token,

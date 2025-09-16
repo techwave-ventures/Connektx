@@ -7,7 +7,7 @@ interface UploadResult {
   error?: string;
 }
 
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 /**
  * Enhanced upload function with better video support

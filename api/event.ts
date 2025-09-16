@@ -1,6 +1,6 @@
 // social/api/event.ts
 
-const API_BASE = 'https://social-backend-y1rg.onrender.com'; // Updated to match your curl command
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com'; // Updated to match your curl command
 
 export async function fetchEvents(filters?: any) {
   try {

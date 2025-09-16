@@ -2,11 +2,13 @@
 
 import { Platform } from 'react-native';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
+
 // --- IMPORTANT ---
 // Replace this with your actual Render backend URL
-const BASE_URL = 'https://social-backend-y1rg.onrender.com';
-const API_URL = 'https://social-backend-y1rg.onrender.com/conversations';
-const API_BASE = 'https://social-backend-y1rg.onrender.com';
+const BASE_URL = API_BASE_URL;
+const API_URL = `${API_BASE_URL}/conversations`;
+const API_BASE = API_BASE_URL;
 
 // Error handling helper
 const handleResponse = async (response: Response) => {

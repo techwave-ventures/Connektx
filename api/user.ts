@@ -1,5 +1,5 @@
 // api/user.ts - Rewritten with safe string handling
-export const API_BASE = 'https://social-backend-y1rg.onrender.com';
+export const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 // Safe string utilities for file operations
 function safeString(value: any): string {
