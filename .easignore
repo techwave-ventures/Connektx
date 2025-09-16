@@ -1,0 +1,39 @@
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# Temporary files and directories
+/dist/
+/tmp/
+*.patch
+*.tgz
+
+# Build artifacts
+/build/
+/web-build/
+
+# Native project directories (EAS Build generates these)
+/android/
+/ios/
+
+# Documentation and miscellaneous
+/docs/
+/coverage/
+.DS_Store
+.idea/
+*.iml
+
+# Testing and debugging
+*.js
+*.ps1
+*.sh

@@ -1,0 +1,608 @@
+// components/home/CommunityCard.tsx
+
+import React, { useState, memo, useCallback, useMemo, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Alert,
+  Modal,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import {
+  Heart,
+  MessageCircle,
+  Share2,
+  Bookmark,
+  MoreHorizontal,
+  Repeat2,
+  Edit3,
+  Trash2,
+  Users,
+  Globe,
+  Lock,
+  Shield,
+} from 'lucide-react-native';
+import Avatar from '@/components/ui/Avatar';
+import ThreadsImageGallery from '@/components/ui/ThreadsImageGallery';
+import FullScreenImageViewer from '@/components/ui/FullScreenImageViewer';
+import { Post } from '@/types';
+import { usePostStore } from '@/store/post-store';
+import { useAuthStore } from '@/store/auth-store';
+import { useCommunityStore } from '@/store/community-store';
+import Colors from '@/constants/colors';
+import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet';
+import { enrichCommunityPost, getCommunityById } from '@/utils/enrichCommunityPosts';
+
+const { width } = Dimensions.get('window');
+
+interface CommunityCardProps {
+  post: Post;
+  onPress?: () => void;
+}
+
+const MAX_CONTENT_LENGTH = 150;
+const CONTAINER_PADDING = 16;
+
+const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => {
+  const router = useRouter();
+  const { likePost, bookmarkPost, unlikePost, deletePost, repostPost, unrepostPost, votePoll } = usePostStore();
+  const { user, token } = useAuthStore();
+  const { initializeCommunities, communities } = useCommunityStore();
+  const [expanded, setExpanded] = useState(false);
+  const [fullScreenVisible, setFullScreenVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [isShareVisible, setIsShareVisible] = useState(false);
+  const [contentToShare, setContentToShare] = useState<{ id: string; type: 'post' | 'news' } | null>(null);
+
+  const isOwnPost = useMemo(() => user && post.author && user.id === post.author.id, [user?.id, post.author?.id]);
+  const shouldTruncate = useMemo(() => post.content?.length > MAX_CONTENT_LENGTH, [post.content?.length]);
+  const displayContent = useMemo(() => shouldTruncate && !expanded ? `${post.content.substring(0, MAX_CONTENT_LENGTH)}...` : post.content, [post.content, shouldTruncate, expanded]);
+  const formattedDate = useMemo(() => new Date(post.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), [post.createdAt]);
+
+  const handleLike = useCallback(() => {
+    post.isLiked ? unlikePost(post.id) : likePost(post.id);
+  }, [post.id, post.isLiked, unlikePost, likePost]);
+
+  const handleBookmark = useCallback(() => {
+    bookmarkPost(post.id);
+  }, [post.id, bookmarkPost]);
+  
+  const handleComment = useCallback(() => {
+    router.push(`/post/${post.id}`);
+  }, [router, post.id]);
+  
+  const handleShare = useCallback(() => {
+    setContentToShare({ id: post.id, type: 'post' });
+    setIsShareVisible(true);
+  }, [post.id]);
+
+  const handleCloseShareSheet = () => {
+    setIsShareVisible(false);
+    setContentToShare(null);
+  };
+  
+  const handleRepostPress = () => {
+    if (post.isReposted) {
+      unrepostPost(post.id);
+    } else {
+      router.push({
+        pathname: '/post/create',
+        params: { repostId: post.id }
+      });
+    }
+  };
+  
+  const handleViewCommunity = () => {
+    if (communityInfo?.id && communityInfo.id !== 'unknown') {
+      router.push(`/community/${communityInfo.id}`);
+    }
+  };
+
+  const handleViewUserProfile = () => {
+    router.push({
+      pathname: `/profile/${post.author.id}`,
+      params: { userData: JSON.stringify({ 
+        id: post.author.id, 
+        name: post.author.name, 
+        avatar: post.author.avatar, 
+        bio: post.author.bio || post.author.headline 
+      }) }
+    });
+  };
+
+  const handleViewPost = () => onPress ? onPress() : router.push(`/post/${post.id}`);
+  const handleImagePress = (imageUri: string, index: number) => {
+    setSelectedImageIndex(index);
+    setFullScreenVisible(true);
+  };
+  const handleCloseFullScreen = () => setFullScreenVisible(false);
+  const handleMoreMenu = () => setMenuVisible(true);
+
+  const handleEditPost = () => {
+    setMenuVisible(false);
+    router.push({
+      pathname: '/post/edit',
+      params: { id: post.id }
+    });
+  };
+
+  const handleDeletePost = () => {
+    setMenuVisible(false);
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deletePost(post.id) }
+      ]
+    );
+  };
+
+  // Enrich post with real community data or ensure communities are loaded
+  const enrichedPost = useMemo(() => {
+    if (post.type === 'community') {
+      return enrichCommunityPost(post);
+    }
+    return post;
+  }, [post, communities]);
+
+  // Initialize communities if not already done (ensures we have community data)
+  useEffect(() => {
+    if (post.type === 'community' && communities.length === 0 && token) {
+      initializeCommunities(token).catch(error => {
+        console.warn('Failed to initialize communities for community card:', error);
+      });
+    }
+  }, [post.type, communities.length, token, initializeCommunities]);
+
+  // Get community info from enriched post, or use fallback only as last resort
+  const communityInfo = useMemo(() => {
+    if (enrichedPost.community) {
+      return enrichedPost.community;
+    }
+    
+    // If we still don't have community data, try to get it directly from store
+    if (post.community?.id && post.community.id !== 'unknown') {
+      const communityFromStore = getCommunityById(post.community.id);
+      if (communityFromStore) {
+        return {
+          id: communityFromStore.id,
+          name: communityFromStore.name,
+          logo: communityFromStore.logo || null,
+          isPrivate: communityFromStore.isPrivate
+        };
+      }
+    }
+    
+    // Last resort fallback - but now with more descriptive text
+    return {
+      id: post.community?.id || 'unknown',
+      name: post.community?.name || 'Loading Community...',
+      logo: post.community?.logo || null,
+      isPrivate: post.community?.isPrivate || false
+    };
+  }, [enrichedPost.community, post.community]);
+  
+
+  return (
+    <View style={styles.container}>
+      {/* Community Header */}
+      <View style={styles.communityHeader}>
+        <TouchableOpacity onPress={handleViewCommunity} style={styles.communityMainInfo}>
+          {communityInfo.logo ? (
+            <Avatar source={communityInfo.logo} size={48} />
+          ) : (
+            <View style={[styles.communityIconFallback, { 
+              width: 48, 
+              height: 48, 
+              borderRadius: 24, 
+              backgroundColor: communityInfo.isPrivate ? Colors.dark.warning : Colors.dark.tint 
+            }]}>
+              <Users size={24} color={Colors.dark.background} />
+            </View>
+          )}
+          <View style={styles.communityInfo}>
+            <View style={styles.communityNameRow}>
+              <Text style={styles.communityName}>r/{communityInfo.name}</Text>
+              {communityInfo.isPrivate ? (
+                <Lock size={14} color={Colors.dark.warning} />
+              ) : (
+                <Globe size={14} color={Colors.dark.success} />
+              )}
+            </View>
+            <Text style={styles.communityTimestamp}>{formattedDate}</Text>
+          </View>
+        </TouchableOpacity>
+        {isOwnPost && (
+          <TouchableOpacity style={styles.moreButton} onPress={handleMoreMenu}>
+            <MoreHorizontal size={20} color={Colors.dark.text} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Author Info - Secondary */}
+      <TouchableOpacity style={styles.authorInfo} onPress={handleViewUserProfile}>
+        <Avatar source={post.author.avatar} size={24} />
+        <Text style={styles.authorName}>by {post.author.name}</Text>
+        <Shield size={12} color={Colors.dark.subtext} />
+      </TouchableOpacity>
+
+      {/* Content */}
+      <TouchableOpacity onPress={handleViewPost} activeOpacity={0.9}>
+        <Text style={styles.content}>{displayContent}</Text>
+        {shouldTruncate && (
+          <TouchableOpacity onPress={() => setExpanded(!expanded)}>
+            <Text style={styles.showMoreText}>{expanded ? 'show less' : '...show more'}</Text>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+
+      {/* Poll */}
+      {post.type === 'poll' && post.pollOptions && (
+        <View style={styles.pollContainer}>
+          {post.pollOptions.map((option, index) => {
+            const percentage = post.totalVotes && post.totalVotes > 0 
+              ? Math.round((option.votes / post.totalVotes) * 100) 
+              : 0;
+            const isSelected = post.userVote === option.id;
+            const isVotingDisabled = post.hasVoted;
+            
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[
+                  styles.pollOption,
+                  isSelected && styles.pollOptionSelected,
+                  isVotingDisabled && styles.pollOptionDisabled
+                ]}
+                onPress={() => {
+                  if (!isVotingDisabled) {
+                    votePoll(post.id, option.id);
+                  }
+                }}
+                disabled={isVotingDisabled}
+              >
+                <View style={styles.pollOptionContent}>
+                  <Text style={[
+                    styles.pollOptionText,
+                    isSelected && styles.pollOptionTextSelected
+                  ]}>
+                    {option.text}
+                  </Text>
+                  {isVotingDisabled && (
+                    <Text style={styles.pollOptionPercentage}>{percentage}%</Text>
+                  )}
+                </View>
+                {isVotingDisabled && (
+                  <View style={[
+                    styles.pollOptionBar,
+                    { width: `${percentage}%` },
+                    isSelected && styles.pollOptionBarSelected
+                  ]} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+          {post.totalVotes !== undefined && (
+            <Text style={styles.pollVoteCount}>
+              {post.totalVotes} {post.totalVotes === 1 ? 'vote' : 'votes'}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Image Gallery */}
+      {Array.isArray(post.images) && post.images?.length > 0 && (
+        <ThreadsImageGallery
+          images={post.images}
+          onImagePress={handleImagePress}
+          containerPadding={CONTAINER_PADDING}
+        />
+      )}
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+          <Heart size={22} color={post?.isLiked ? Colors.dark.error : Colors.dark.text} fill={post?.isLiked ? Colors.dark.error : 'transparent'} />
+          <Text style={styles.actionText}>{post.likes}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
+          <MessageCircle size={22} color={Colors.dark.text} />
+          <Text style={styles.actionText}>{post?.comments}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={handleRepostPress}>
+          <Repeat2 size={22} color={Colors.dark.text} />
+          {(post.reposts || 0) > 0 && (<Text style={styles.actionText}>{post.reposts}</Text>)}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+          <Share2 size={22} color={Colors.dark.text} />
+        </TouchableOpacity>
+        <View style={styles.spacer} />
+        <TouchableOpacity onPress={handleBookmark}>
+          <Bookmark size={22} color={Colors.dark.text} fill={post?.isBookmarked ? Colors.dark.text : 'transparent'} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Modals and Viewers */}
+      {Array.isArray(post.images) && post.images?.length > 0 && (
+        <FullScreenImageViewer
+          visible={fullScreenVisible}
+          images={post.images}
+          initialIndex={selectedImageIndex}
+          postId={post.id}
+          likes={post.likes}
+          comments={post.comments}
+          isLiked={post.isLiked}
+          onClose={handleCloseFullScreen}
+          onLike={handleLike}
+          onComment={handleComment}
+          onShare={handleShare}
+          onRepost={handleRepostPress}
+        />
+      )}
+
+      {/* Action Sheet Modal for Edit/Delete */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHeader}>
+              <View style={styles.actionSheetHandle} />
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.actionItem}
+              onPress={handleEditPost}
+            >
+              <Edit3 size={20} color={Colors.dark.text} />
+              <Text style={styles.menuActionText}>Edit Post</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionItem, styles.deleteAction]}
+              onPress={handleDeletePost}
+            >
+              <Trash2 size={20} color={Colors.dark.error} />
+              <Text style={[styles.menuActionText, styles.deleteText]}>Delete Post</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.actionItem, styles.cancelAction]}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Share Bottom Sheet */}
+      <ShareBottomSheet
+        visible={isShareVisible}
+        onClose={handleCloseShareSheet}
+        contentId={contentToShare?.id || null}
+        contentType={contentToShare?.type || null}
+      />
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 16,
+    padding: CONTAINER_PADDING,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.dark.primary, // Community indicator
+  },
+  communityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  communityMainInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  communityInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  communityNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  communityName: {
+    color: Colors.dark.text,
+    fontWeight: '700',
+    fontSize: 18,
+    marginRight: 8,
+  },
+  communityTimestamp: {
+    color: Colors.dark.subtext,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  communityIconFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreButton: {
+    padding: 4,
+  },
+  authorInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingLeft: 8,
+    opacity: 0.8,
+  },
+  authorName: {
+    color: Colors.dark.subtext,
+    fontSize: 13,
+    marginLeft: 8,
+    marginRight: 6,
+    fontStyle: 'italic',
+  },
+  content: {
+    color: Colors.dark.text,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  showMoreText: {
+    color: Colors.dark.tint,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  actionText: {
+    color: Colors.dark.text,
+    marginLeft: 6,
+    fontSize: 14,
+  },
+  spacer: {
+    flex: 1,
+  },
+  // Poll styles
+  pollContainer: {
+    marginBottom: 12,
+  },
+  pollOption: {
+    backgroundColor: Colors.dark.background,
+    borderWidth: 2,
+    borderColor: Colors.dark.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  pollOptionSelected: {
+    borderColor: Colors.dark.tint,
+  },
+  pollOptionDisabled: {
+    opacity: 0.8,
+  },
+  pollOptionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  pollOptionText: {
+    color: Colors.dark.text,
+    fontSize: 15,
+    fontWeight: '500',
+    flex: 1,
+  },
+  pollOptionTextSelected: {
+    color: Colors.dark.tint,
+    fontWeight: '600',
+  },
+  pollOptionPercentage: {
+    color: Colors.dark.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  pollOptionBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: '100%',
+    backgroundColor: Colors.dark.border,
+    opacity: 0.3,
+    zIndex: 1,
+  },
+  pollOptionBarSelected: {
+    backgroundColor: Colors.dark.tint,
+    opacity: 0.2,
+  },
+  pollVoteCount: {
+    color: Colors.dark.subtext,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: Colors.dark.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  actionSheetHeader: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  actionSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.dark.border,
+    borderRadius: 2,
+  },
+  actionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  deleteAction: {
+    borderBottomWidth: 0,
+  },
+  cancelAction: {
+    justifyContent: 'center',
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  menuActionText: {
+    color: Colors.dark.text,
+    marginLeft: 12,
+    fontSize: 16,
+  },
+  deleteText: {
+    color: Colors.dark.error,
+  },
+  cancelText: {
+    color: Colors.dark.subtext,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});
+
+export default CommunityCard;
