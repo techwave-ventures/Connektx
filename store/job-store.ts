@@ -49,12 +49,12 @@ const mockJobs: Job[] = [
     ],
     companyDetails: {
       name: 'ConnektX',
-      size: '50-200',
-      address: 'Hinjewadi, Pune',
+      size: '1-10',
+      address: 'Pune',
       contactPerson: {
         name: 'HR Team',
-        email: 'hr@connektx.com',
-        phone: '+91 9876543212'
+        email: 'contact@techwaveventures.in',
+        phone: '+91 '
       }
     }
   },
@@ -90,12 +90,12 @@ const mockJobs: Job[] = [
     ],
     companyDetails: {
       name: 'ConnektX',
-      size: '50-200',
-      address: 'Hinjewadi, Pune',
+      size: '1-10',
+      address: 'Pune',
       contactPerson: {
         name: 'HR Team',
-        email: 'hr@connektx.com',
-        phone: '+91 9876543213'
+        email: 'contact@techwaveventures.in',
+        phone: '+91 '
       }
     }
   },
@@ -143,12 +143,12 @@ const mockJobs: Job[] = [
     ],
     companyDetails: {
       name: 'ConnektX',
-      size: '50-200',
-      address: 'Hinjewadi, Pune',
+      size: '1-10',
+      address: 'Pune',
       contactPerson: {
         name: 'HR Team',
-        email: 'hr@connektx.com',
-        phone: '+91 9876543215'
+        email: 'contact@techwaveventures.in',
+        phone: '+91 '
       }
     }
   }
