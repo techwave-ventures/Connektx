@@ -71,44 +71,44 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.drawer}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={Colors.dark.text} />
-            </TouchableOpacity>
-          </View>
-
           <ScrollView style={styles.content}>
             {/* User Profile Section */}
             {user && (
-              <TouchableOpacity 
-                style={styles.profileSection}
-                onPress={() => handleNavigation('/profile')}
-              >
-                <View style={styles.avatarContainer}>
-                  <Image 
-                    source={ {uri : user.avatar} } 
-                    style={{
-                      width: 60,
-                      height: 60,
-                      borderRadius: 30,
-                    }}
-                  />
-                </View>
+              <View style={styles.profileSection}>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <X size={20} color={Colors.dark.text} />
+                </TouchableOpacity>
                 
-                <View style={styles.profileInfo}>
-                  <Text style={styles.userName}>{user.name}</Text>
-                  <Text style={styles.userBio} numberOfLines={1}>{user.headline || "Hey, I'm on ConnektX"}</Text>
-                  <View style={styles.profileStats}>
-                    <Text style={styles.profileStat}>
-                      <Text style={styles.statNumber}>{user.followers || 0}</Text> Followers
-                    </Text>
-                    <View style={styles.statDivider} />
-                    <Text style={styles.profileStat}>
-                      <Text style={styles.statNumber}>{user.following || 0}</Text> Following
-                    </Text>
+                <TouchableOpacity 
+                  style={styles.profileContent}
+                  onPress={() => handleNavigation('/profile')}
+                >
+                  <View style={styles.avatarContainer}>
+                    <Image 
+                      source={ {uri : user.avatar} } 
+                      style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                      }}
+                    />
                   </View>
-                </View>
-              </TouchableOpacity>
+                
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.userName}>{user.name}</Text>
+                    <Text style={styles.userBio} numberOfLines={1}>{user.headline || "Hey, I'm on ConnektX"}</Text>
+                    <View style={styles.profileStats}>
+                      <Text style={styles.profileStat}>
+                        <Text style={styles.statNumber}>{user.followers || 0}</Text> Followers
+                      </Text>
+                      <View style={styles.statDivider} />
+                      <Text style={styles.profileStat}>
+                        <Text style={styles.statNumber}>{user.following || 0}</Text> Following
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
             )}
 
             <View style={styles.divider} />
@@ -288,27 +288,29 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.dark.border,
-  },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.dark.card,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   content: {
     flex: 1,
   },
   profileSection: {
-    padding: 16,
+    position: 'relative',
     backgroundColor: Colors.dark.background,
+  },
+  profileContent: {
+    padding: 16,
+    paddingTop: 20,
+    alignItems: 'center',
   },
   avatarContainer: {
     position: 'relative',
@@ -375,7 +377,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.dark.border,
-    marginVertical: 8,
+    marginVertical: 4,
   },
   navSection: {
     paddingVertical: 8,
