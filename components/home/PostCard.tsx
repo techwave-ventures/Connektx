@@ -244,7 +244,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
       </View>
 
       {/* Community Context */}
-      {post.community && (
+      {post.community && variant !== 'communityDetail' && (
         <TouchableOpacity 
           style={styles.communityContainer}
           onPress={() => {
@@ -424,7 +424,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
           <MessageCircle size={22} color={Colors.dark.text} />
-          <Text style={styles.actionText}>{post?.comments}</Text>
+          <Text style={styles.actionText}>{post?.comments || 0}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleRepostPress}>
           <Repeat2 size={22} color={Colors.dark.text} />

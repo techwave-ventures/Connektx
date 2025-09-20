@@ -1257,12 +1257,12 @@ export default function CommunityDetailScreen() {
                     key={question.id} 
                     style={styles.questionPostCard}
                     onPress={() => {
-                      console.log('🔗 [Questions Tab] Navigating to question detail:', {
+                      console.log('🔗 [Questions Tab] Navigating to question post:', {
                         questionId: question.id,
-                        route: `/qa/${question.id}`,
+                        route: `/post/${question.id}`,
                         questionContent: question.content?.substring(0, 50) + '...'
                       });
-                      router.push(`/qa/${question.id}`);
+                      router.push(`/post/${question.id}`);
                     }}
                     activeOpacity={0.8}
                   >
@@ -1362,15 +1362,11 @@ export default function CommunityDetailScreen() {
                         <Text style={styles.questionStatText}>{question.comments?.length || 0} answers</Text>
                       </View>
                       
-                      <View style={styles.questionStatItem}>
-                        <Eye size={16} color={Colors.dark.subtext} />
-                        <Text style={styles.questionStatText}>{Math.floor(Math.random() * 100) + 10} views</Text>
-                      </View>
                       
                       <TouchableOpacity 
                         style={styles.answerQuestionButton}
                         onPress={() => {
-                          router.push(`/qa/${question.id}`);
+                          router.push(`/post/${question.id}`);
                         }}
                       >
                         <Text style={styles.answerQuestionText}>Answer</Text>
@@ -1899,7 +1895,7 @@ export default function CommunityDetailScreen() {
                 style={styles.qaListItem}
                 onPress={() => {
                   setQaModalVisible(false);
-                  router.push(`/qa/${question.id}`);
+                  router.push(`/post/${question.id}`);
                 }}
               >
                 <View style={styles.qaListItemHeader}>

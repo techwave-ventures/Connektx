@@ -1080,7 +1080,7 @@ export const useCommunityStore = create<CommunityState>()(
                   logo: community.logo,
                   isPrivate: community.isPrivate,
                 },
-                type: 'community' as const,
+          type: normalizedCreated.type === 'question' ? 'question' as const : 'community' as const,
                 pollOptions: normalizedCreated.pollOptions,
                 totalVotes: normalizedCreated.totalVotes || 0,
                 hasVoted: false,

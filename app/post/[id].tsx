@@ -318,7 +318,7 @@ export default function PostDetailScreen() {
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <ArrowLeft size={24} color={Colors.dark.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Post</Text>
+          <Text style={styles.headerTitle}>Loading...</Text>
           <View style={styles.headerRight} />
         </View>
         <View style={styles.loadingContainer}>
@@ -333,7 +333,7 @@ export default function PostDetailScreen() {
       <Stack.Screen 
         options={{
           headerShown: true,
-          headerTitle: 'Post',
+          headerTitle: post?.type === 'question' ? 'Question' : 'Post',
           headerStyle: { backgroundColor: Colors.dark.background },
           headerTitleStyle: { color: Colors.dark.text, fontSize: 18, fontWeight: '600' },
           headerLeft: () => (
@@ -438,11 +438,11 @@ export default function PostDetailScreen() {
           </View>
           
           <View style={styles.commentsSection}>
-            <Text style={styles.commentsTitle}>Comments</Text>
+            <Text style={styles.commentsTitle}>{post.type === 'question' ? 'Answers' : 'Comments'}</Text>
             {commentsByPostId[id] && commentsByPostId[id].length > 0 ? (
               [...commentsByPostId[id]].reverse().map(comment => renderComment(comment))
             ) : (
-              <Text style={styles.noCommentsText}>No comments yet. Be the first to comment!</Text>
+              <Text style={styles.noCommentsText}>{post.type === 'question' ? 'No answers yet. Be the first to answer!' : 'No comments yet. Be the first to comment!'}</Text>
             )}
           </View>
         </ScrollView>
@@ -467,7 +467,7 @@ export default function PostDetailScreen() {
         />
         <TextInput
           style={styles.commentInput}
-          placeholder={replyingTo ? `Reply to ${replyingTo.author}...` : "Add a comment..."}
+          placeholder={replyingTo ? `Reply to ${replyingTo.author}...` : (post.type === 'question' ? "Add an answer..." : "Add a comment...")}
           placeholderTextColor={Colors.dark.subtext}
           value={commentText}
           onChangeText={setCommentText}
