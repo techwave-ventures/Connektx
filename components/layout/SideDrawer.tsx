@@ -66,11 +66,19 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
     <Modal
       visible={isOpen}
       transparent={true}
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
-        <View style={styles.drawer}>
+      <TouchableOpacity 
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          style={styles.drawer}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
           <ScrollView style={styles.content}>
             {/* User Profile Section */}
             {user && (
@@ -266,8 +274,8 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
               <Text style={styles.footerText}>App Version 1.0.0</Text>
             </View>
           </ScrollView>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };
@@ -276,6 +284,8 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
   },
   drawer: {
     width: width * 0.8,
