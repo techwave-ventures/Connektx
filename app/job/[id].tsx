@@ -10,7 +10,8 @@ import {
   Modal,
   Alert,
   Platform,
-  StatusBar
+  StatusBar,
+  Linking
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { 
@@ -85,8 +86,25 @@ export default function JobDetailScreen() {
     
   };
 
-  const handleApply = () => {
-    setApplyModalVisible(true);
+  const handleApply = async () => {
+    if (!job) return;
+    
+    // If job has an application URL (Google Form), open it
+    if (job.applicationUrl) {
+      try {
+        const supported = await Linking.canOpenURL(job.applicationUrl);
+        if (supported) {
+          await Linking.openURL(job.applicationUrl);
+        } else {
+          Alert.alert('Error', 'Unable to open the application form. Please try again later.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Unable to open the application form. Please try again later.');
+      }
+    } else {
+      // Fallback to the old modal-based application form
+      setApplyModalVisible(true);
+    }
   };
 
   const handleSubmitApplication = async () => {

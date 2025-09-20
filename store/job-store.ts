@@ -18,6 +18,7 @@ const mockJobs: Job[] = [
     description: 'Join our dynamic team as a React Native Developer! You will be responsible for developing high-quality mobile applications for both Android and iOS platforms. Work on exciting projects that reach millions of users and collaborate with a passionate team of developers and designers.',
     postedAt: '2025-09-22T10:00:00Z',
     deadline: '2025-10-22T10:00:00Z',
+    applicationUrl: 'https://forms.gle/6smNquDVDYhLg8tt7',
     isBookmarked: false,
     postedBy: 'user1',
     applications: [
@@ -70,6 +71,7 @@ const mockJobs: Job[] = [
     description: 'We are seeking a creative and data-driven Digital Marketing Associate to join our team. You will manage social media campaigns, create engaging content, run PPC campaigns, and analyze performance metrics to drive growth for our clients across various industries.',
     postedAt: '2025-09-22T11:00:00Z',
     deadline: '2025-10-22T11:00:00Z',
+    applicationUrl: 'https://forms.gle/LqKwek7L23mkPyF29',
     isBookmarked: true,
     postedBy: 'user2',
     applications: [
@@ -110,6 +112,7 @@ const mockJobs: Job[] = [
     description: 'Be the face of ConnektX at your campus! As a Campus Ambassador, you will organize events, workshops, and promotional activities. Perfect opportunity for students to gain leadership experience, build networks, and learn while studying. Flexible hours and great learning opportunities.',
     postedAt: '2025-09-22T12:00:00Z',
     deadline: '2025-10-22T12:00:00Z',
+    applicationUrl: 'https://forms.gle/ZirwVUWYsJiNQgLQ8',
     isBookmarked: false,
     postedBy: 'user3',
     applications: [

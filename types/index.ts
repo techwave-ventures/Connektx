@@ -146,35 +146,44 @@ export interface User {
   
   export interface Job {
     id: string;
-    title: string;
+    role: string; // Job title/role
     company: string;
-    companyLogo: string;
+    logo: string; // Company logo URL
     location: string;
     salary?: string;
-    type: 'Full-time' | 'Part-time' | 'Contract' | 'Internship' | 'Remote';
+    type: string; // 'Full-time' | 'Part-time' | 'Contract' | 'Internship' | 'Remote'
+    experience?: string; // Experience requirement
     description: string;
-    requirements: string[];
-    responsibilities: string[];
     skills: string[];
     postedAt: string;
     deadline?: string;
-    isRemote: boolean;
+    applicationUrl?: string; // Google Form URL for applications
     isBookmarked: boolean;
-    applications?: JobApplication[];
-    companyId: string;
+    postedBy?: string;
+    applications: JobApplication[];
+    companyDetails?: {
+      name: string;
+      size: string;
+      address: string;
+      contactPerson: {
+        name: string;
+        email: string;
+        phone: string;
+      };
+    };
   }
   
   export interface JobApplication {
     id: string;
-    jobId: string;
-    userId: string;
-    userName: string;
-    userEmail: string;
-    userPhone: string;
+    applicantId: string;
+    name: string;
+    email: string;
+    phone: string;
+    experience: string;
+    coverLetter: string;
     resume: string;
-    coverLetter?: string;
-    status: 'pending' | 'reviewed' | 'shortlisted' | 'rejected';
     appliedAt: string;
+    status: 'pending' | 'reviewing' | 'accepted' | 'rejected';
   }
   
   export interface Company {
