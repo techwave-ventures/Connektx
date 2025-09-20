@@ -293,6 +293,7 @@ const HomeScreen = memo(() => {
 
   const renderHeader = () => (
     <>
+      {/* Temporarily commented out Stories section
       {dataLoading ? (
         <StoriesSectionSkeleton />
       ) : (
@@ -304,6 +305,7 @@ const HomeScreen = memo(() => {
           onAddStory={handleAddStory}
         />
       )}
+      */}
       <TabBar
         tabs={[
           { id: 'latest', label: 'Latest' },
@@ -348,7 +350,7 @@ const HomeScreen = memo(() => {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.content}>
         <AppHeader 
-          title="Home"
+          title="ConnektX"
         />
         
         {(dataLoading || isLoading) && (!posts || posts.length === 0) ? (
