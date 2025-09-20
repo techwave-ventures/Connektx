@@ -884,6 +884,7 @@ export default function EventsScreen() {
           </ScrollView>
         );
         
+      /* Temporarily commented out My Events tab content
       case 'myEvents':
         return (
           <ScrollView 
@@ -1031,6 +1032,7 @@ export default function EventsScreen() {
             )}
           </ScrollView>
         );
+        */
       
       default:
         return null;
@@ -1046,7 +1048,7 @@ export default function EventsScreen() {
         tabs={[
           { id: 'events', label: 'Events' },
           { id: 'tickets', label: 'Tickets' },
-          { id: 'myEvents', label: 'My Events' },
+          // { id: 'myEvents', label: 'My Events' },  // Temporarily commented out
         ]}
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -1054,6 +1056,7 @@ export default function EventsScreen() {
       
       {renderTabContent()}
       
+      {/* Temporarily commented out create event floating action button
       {(activeTab === 'events' || activeTab === 'myEvents') && (
         <TouchableOpacity 
           style={[styles.fab, { bottom: 100 + insets.bottom }]}
@@ -1062,6 +1065,7 @@ export default function EventsScreen() {
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
       )}
+      */}
       
       {showScrollToTop && (
         <TouchableOpacity 
