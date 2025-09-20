@@ -20,12 +20,11 @@ import {
   ArrowLeft, 
   Image as ImageIcon, 
   X, 
-  Camera,
-  Video,
   FileText,
-  MapPin,
-  Users,
-  Globe
+  Globe,
+  Images,
+  BarChart3,
+  Link2
 } from 'lucide-react-native';
 import Avatar from '@/components/ui/Avatar';
 import Button from '@/components/ui/Button';
@@ -74,25 +73,35 @@ export default function CreatePostScreen() {
     }
   };
 
-  const handleAddImage = async () => {
+  const handleGalleryPress = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, // Don't force cropping
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow both images and videos
+        allowsEditing: false,
         quality: 0.8,
         allowsMultipleSelection: true,
         selectionLimit: 5,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        // Add all selected images to the state
-        const newImages = result.assets.map(asset => asset.uri);
-        setImageUrls(prev => [...prev, ...newImages]);
+        // Add all selected media to the state
+        const newMedia = result.assets.map(asset => asset.uri);
+        setImageUrls(prev => [...prev, ...newMedia]);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      console.error('Error picking media from gallery:', error);
+      Alert.alert('Error', 'Failed to open gallery');
     }
+  };
+
+  const handleAddPoll = () => {
+    Alert.alert('Poll', 'Poll functionality coming soon!');
+    // TODO: Implement poll functionality
+  };
+
+  const handleAddLink = () => {
+    Alert.alert('Add Link', 'Link functionality coming soon!');
+    // TODO: Implement link functionality
   };
 
   const handleRemoveImage = (index: number) => {
@@ -297,35 +306,26 @@ export default function CreatePostScreen() {
           >
             <TouchableOpacity 
               style={styles.attachmentButton}
-              onPress={handleAddImage}
+              onPress={handleGalleryPress}
             >
-              <ImageIcon size={20} color={Colors.dark.success} />
-              <Text style={styles.attachmentText}>Image</Text>
+              <Images size={20} color={Colors.dark.success} />
+              <Text style={styles.attachmentText}>Gallery</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.attachmentButton}>
-              <Camera size={20} color={Colors.dark.error} />
-              <Text style={styles.attachmentText}>Camera</Text>
+            <TouchableOpacity 
+              style={styles.attachmentButton}
+              onPress={handleAddPoll}
+            >
+              <BarChart3 size={20} color={Colors.dark.primary} />
+              <Text style={styles.attachmentText}>Add Poll</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.attachmentButton}>
-              <Video size={20} color={Colors.dark.warning} />
-              <Text style={styles.attachmentText}>Video</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.attachmentButton}>
-              <FileText size={20} color={Colors.dark.info} />
-              <Text style={styles.attachmentText}>Document</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.attachmentButton}>
-              <MapPin size={20} color={Colors.dark.tint} />
-              <Text style={styles.attachmentText}>Location</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.attachmentButton}>
-              <Users size={20} color={Colors.dark.secondary} />
-              <Text style={styles.attachmentText}>Tag People</Text>
+            <TouchableOpacity 
+              style={styles.attachmentButton}
+              onPress={handleAddLink}
+            >
+              <Link2 size={20} color={Colors.dark.accent} />
+              <Text style={styles.attachmentText}>Add Link</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
