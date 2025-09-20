@@ -114,6 +114,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
             <View style={styles.divider} />
 
             {/* Navigation Items */}
+            {/* Temporarily commented out MAIN section
             <View style={styles.navSection}>
               <Text style={styles.sectionTitle}>MAIN</Text>
               
@@ -165,8 +166,11 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <Text style={styles.navItemText}>Communities</Text>
               </TouchableOpacity>
             </View>
+            */}
 
+            {/* Divider for MAIN section - temporarily commented out
             <View style={styles.divider} />
+            */}
 
             <View style={styles.navSection}>
               <Text style={styles.sectionTitle}>PERSONAL</Text>
@@ -203,6 +207,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <Text style={styles.navItemText}>Saved</Text>
               </TouchableOpacity>
               
+              {/* Temporarily commented out Analytics and Community Dashboard
               <TouchableOpacity 
                 style={styles.navItem}
                 onPress={() => handleNavigation('/analytics')}
@@ -220,8 +225,10 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                   <Text style={[styles.navItemText, { color: Colors.dark.tint }]}>Community Dashboard</Text>
                 </TouchableOpacity>
               )}
+              */}
             </View>
 
+            {/* Temporarily commented out OTHER section and its dividers
             <View style={styles.divider} />
 
             <View style={styles.navSection}>
@@ -245,6 +252,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
             </View>
 
             <View style={styles.divider} />
+            */}
 
             <TouchableOpacity 
               style={[styles.navItem, styles.logoutButton]}
