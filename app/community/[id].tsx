@@ -863,6 +863,7 @@ export default function CommunityDetailScreen() {
           ),
           headerRight: () => (
             <View style={styles.headerActions}>
+              {/* Temporarily commented out settings icon
               {canModerateContent() && (
                 <TouchableOpacity 
                   style={styles.headerButton}
@@ -871,6 +872,7 @@ export default function CommunityDetailScreen() {
                   <Settings size={22} color={Colors.dark.text} />
                 </TouchableOpacity>
               )}
+              */}
               <TouchableOpacity style={styles.headerButton}>
                 <MoreHorizontal size={22} color={Colors.dark.text} />
               </TouchableOpacity>
