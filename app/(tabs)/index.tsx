@@ -135,8 +135,10 @@ const HomeScreen = memo(() => {
 
   const fetchFollowingStories = async () => {
     try {
+      console.log('🚀 Fetching following users stories...');
       const response = await followingUserStory(token);
       const rawStories = response || [];
+      console.log('📊 Raw stories from API:', rawStories.length);
 
       // Group stories by user
       const groupedStories = rawStories.reduce((acc: any, story: any) => {
@@ -176,6 +178,9 @@ const HomeScreen = memo(() => {
 
       // Convert the grouped object back into an array of story groups
       const storyGroups = Object.values(groupedStories);
+      
+      console.log('📝 Story groups created:', storyGroups.length);
+      console.log('🗂 Sample story group:', storyGroups[0]);
 
       setFetchedStories(storyGroups);
     } catch (err) {
