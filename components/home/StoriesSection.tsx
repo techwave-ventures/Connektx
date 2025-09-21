@@ -28,18 +28,19 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
   const safeUserStories = Array.isArray(userStories) ? userStories : [];
   const safeFetchedStories = Array.isArray(fetchedStories) ? fetchedStories : [];
   
-  // Debug logging
-  console.log('📱 StoriesSection Debug:');
-  console.log('📊 Mock stories count:', stories?.length || 0);
-  console.log('👤 User stories count:', safeUserStories.length);
-  console.log('👥 Fetched following stories count:', safeFetchedStories.length);
-  console.log('📝 Fetched stories structure:', safeFetchedStories.slice(0, 2));
-
   // Use real following users' stories from fetchedStories instead of mock stories
+  // Filter out current user's own stories from following stories
   const groupedStories = safeFetchedStories.reduce((acc, storyGroup) => {
     if (!storyGroup?.user?.id || !storyGroup?.stories) return acc;
     
     const userId = storyGroup.user.id;
+    
+    // Skip if this is the current user's story group
+    if (user?.id && userId === user.id) {
+      console.log('🚫 Filtering out current user\'s story from following stories:', storyGroup.user.name);
+      return acc;
+    }
+    
     // Convert the fetched story format to the expected Story format
     const userStories = storyGroup.stories.map((story: any) => ({
       id: story.id,
@@ -54,6 +55,15 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
     acc[userId] = userStories;
     return acc;
   }, {} as Record<string, Story[]>);
+  
+  // Debug logging (after groupedStories is created)
+  console.log('📱 StoriesSection Debug:');
+  console.log('📊 Mock stories count:', stories?.length || 0);
+  console.log('👤 User stories count:', safeUserStories.length);
+  console.log('👥 Fetched following stories count (raw):', safeFetchedStories.length);
+  console.log('🚫 Following stories count (after filtering out own):', Object.keys(groupedStories).length);
+  console.log('📝 Current user ID:', user?.id);
+  console.log('🗂 Sample fetched story group:', safeFetchedStories.slice(0, 1));
 
   // New function to handle pressing the user's own story circle
   const handleViewUserStories = () => {
