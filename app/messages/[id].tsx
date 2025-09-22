@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
@@ -62,7 +61,6 @@ export default function ConversationScreen() {
   const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   
   const [headerInfo, setHeaderInfo] = useState({
     name: initialOtherUserName || 'Direct Message',
@@ -79,30 +77,13 @@ export default function ConversationScreen() {
     initDatabase();
   }, []);
 
-  // Keyboard visibility tracking
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => setKeyboardVisible(true)
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardVisible(false)
-    );
-
-    return () => {
-      keyboardDidShowListener?.remove();
-      keyboardDidHideListener?.remove();
-    };
-  }, []);
-
   // Mark conversation as read when the screen is focused
   useFocusEffect(
     useCallback(() => {
       const markAsRead = async () => {
         if (token && conversationId) {
           try {
-            // console.log(`[API CALL] Marking conversation ${conversationId} as read.`);
+            // console.log([API CALL] Marking conversation ${conversationId} as read.);
             await markMessagesAsSeen(conversationId, token);
             // console.log('[SUCCESS] Conversation marked as read.');
           } catch (error) {
@@ -126,15 +107,15 @@ export default function ConversationScreen() {
       
       try {
         // --- 1. Load from Local DB First for instant UI ---
-        // console.log(`[DB] Loading local messages for conversationId: ${conversationId}`);
+        // console.log([DB] Loading local messages for conversationId: ${conversationId});
         const localMessages = await getLocalMessages(conversationId);
         if (localMessages.length > 0) {
             setMessages(localMessages);
-            // console.log(`[DB] Loaded ${localMessages.length} messages from local cache.`);
+            // console.log([DB] Loaded ${localMessages.length} messages from local cache.);
         }
 
         // --- 2. Fetch latest from API ---
-        // console.log(`[API CALL] Fetching remote messages for conversationId: ${conversationId}`);
+        // console.log([API CALL] Fetching remote messages for conversationId: ${conversationId});
         const response = await getMessagesForConversation(conversationId, token);
         // console.log('[API RESPONSE] getMessagesForConversation received.');
 
@@ -143,7 +124,7 @@ export default function ConversationScreen() {
 
             setConversationStatus(status);
             setInitiatedBy(initiator);
-            // console.log(`[STATE UPDATE] Status: ${status}, Initiated by: ${initiator}`);
+            // console.log([STATE UPDATE] Status: ${status}, Initiated by: ${initiator});
 
             const transformedRemoteMessages = remoteMessagesData.map((msg: any) => ({
                 id: msg._id,
@@ -163,14 +144,14 @@ export default function ConversationScreen() {
             const newUniqueMessages = transformedRemoteMessages.filter(m => !localMessageIds.has(m.id));
             
             if (newUniqueMessages.length > 0) {
-                // console.log(`[LOG] Found ${newUniqueMessages.length} new messages from API.`);
+                // console.log([LOG] Found ${newUniqueMessages.length} new messages from API.);
                 const combinedMessages = [...localMessages, ...newUniqueMessages];
                 combinedMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
                 setMessages(combinedMessages);
-                // console.log(`[STATE UPDATE] Total messages now: ${combinedMessages.length}`);
+                // console.log([STATE UPDATE] Total messages now: ${combinedMessages.length});
 
                 // --- 4. Save new messages to DB ---
-                // console.log(`[DB] Saving ${newUniqueMessages.length} new messages to local cache.`);
+                // console.log([DB] Saving ${newUniqueMessages.length} new messages to local cache.);
                 await saveMessages(conversationId, newUniqueMessages);
             } else {
                 // console.log('[LOG] No new messages from API. Local cache is up-to-date.');
@@ -217,7 +198,7 @@ export default function ConversationScreen() {
           };
 
           setMessages(prev => {
-            // console.log(`[STATE UPDATE] Adding new message with ID: ${transformedMessage.id}`);
+            // console.log([STATE UPDATE] Adding new message with ID: ${transformedMessage.id});
             // Also save to local DB
             saveMessages(conversationId, [transformedMessage]);
             return [...prev, transformedMessage];
@@ -233,36 +214,26 @@ export default function ConversationScreen() {
     }
   }, [conversationId]);
   
-  // Auto-scroll to the bottom on initial load and message update
+  // Auto-scroll to the bottom when new messages are added
   useEffect(() => {
-    if (messages.length > 0 && !isLoading) {
+    if (messages.length > 0) {
       // console.log('[UI] Scrolling to end.');
-      const timer = setTimeout(() => {
-        if (flatListRef.current) {
-          flatListRef.current.scrollToEnd({ animated: false });
-        }
-      }, 150);
-      return () => clearTimeout(timer);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [messages.length, isLoading]);
+  }, [messages.length]);
 
 
   const handleSendMessage = async () => {
     if (!messageText.trim() || !user || isSending) return;
 
     const messageContent = messageText.trim();
-    // console.log(`[API CALL] Sending message: "${messageContent}"`);
+    // console.log([API CALL] Sending message: "${messageContent}");
     setMessageText('');
     setIsSending(true);
 
     try {
       await sendMessage(conversationId!, { content: messageContent }, token!);
       // console.log('[SUCCESS] Message sent successfully.');
-      
-      // Ensure scroll to bottom after sending
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
     } catch (error) {
       console.error('[API ERROR] Error sending message:', error);
       setMessageText(messageContent);
@@ -341,10 +312,7 @@ export default function ConversationScreen() {
     const showRequestReceivedFooter = conversationStatus === 'pending' && initiatedBy !== user?.id;
     if (showRequestReceivedFooter) {
       return (
-        <View style={[
-          styles.requestFooter,
-          !isKeyboardVisible && styles.requestFooterWithBottomSafeArea
-        ]}>
+        <View style={styles.requestFooter}>
           <Text style={styles.requestFooterText}>{headerInfo.name} wants to connect with you.</Text>
           <View style={styles.requestButtons}>
             <TouchableOpacity style={[styles.requestButton, styles.rejectButton]} onPress={handleRejectRequest}>
@@ -369,10 +337,7 @@ export default function ConversationScreen() {
     // Show the input box if the chat is active OR if the user can send their first request message.
     if (canSendMessage || canSendFirstMessage) {
       return (
-        <View style={[
-          styles.inputContainer,
-          !isKeyboardVisible && styles.inputContainerWithBottomSafeArea
-        ]}>
+        <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
             placeholder={canSendFirstMessage ? "Send a message request..." : "Type a message..."}
@@ -396,10 +361,7 @@ export default function ConversationScreen() {
     const showPendingSentFooter = conversationStatus === 'pending' && initiatedBy === user?.id && messages.length > 0;
     if (showPendingSentFooter) {
       return (
-        <View style={[
-          styles.pendingFooter,
-          !isKeyboardVisible && styles.pendingFooterWithBottomSafeArea
-        ]}>
+        <View style={styles.pendingFooter}>
           <Text style={styles.pendingFooterText}>
             Your message request has been sent. You can chat freely once your request is accepted.
           </Text>
@@ -412,7 +374,7 @@ export default function ConversationScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -443,30 +405,15 @@ export default function ConversationScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={100}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderChatMessage}
-          contentContainerStyle={[
-            styles.messagesList,
-            messages.length === 0 && styles.emptyMessagesList
-          ]}
+          contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 10
-          }}
-          onContentSizeChange={() => {
-            // Scroll to end when content size changes (new message added)
-            if (messages.length > 0) {
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 50);
-            }
-          }}
           ListEmptyComponent={
             !isLoading ? (
               <View style={styles.emptyMessagesContainer}>
@@ -525,13 +472,9 @@ const styles = StyleSheet.create({
     keyboardAvoidingView: { flex: 1 },
     messagesList: { 
       paddingHorizontal: 16, 
+      flexGrow: 1, 
       paddingTop: 8,
-      paddingBottom: 16,
-      minHeight: '100%',
-    },
-    emptyMessagesList: {
-      flexGrow: 1,
-      justifyContent: 'center',
+      paddingBottom: 8,
     },
     
     headerTitle: { flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: -20 },
@@ -541,10 +484,7 @@ const styles = StyleSheet.create({
     backButton: { paddingHorizontal: 16 },
     headerMenuButton: { paddingHorizontal: 16 },
     
-    messageContainer: { 
-      marginVertical: 4,
-      paddingHorizontal: 2,
-    },
+    messageContainer: { marginVertical: 4 },
     messageBubble: { 
       maxWidth: '85%', 
       paddingHorizontal: 12, 
@@ -602,15 +542,11 @@ const styles = StyleSheet.create({
       flexDirection: 'row', 
       alignItems: 'flex-end', 
       paddingHorizontal: 12, 
-      paddingTop: 8, 
-      paddingBottom: 8, 
+      paddingVertical: 8, 
       borderTopWidth: 1, 
       borderTopColor: Colors.dark.border, 
       backgroundColor: Colors.dark.background, 
       gap: 8 
-    },
-    inputContainerWithBottomSafeArea: {
-      paddingBottom: Platform.OS === 'ios' ? 34 : 8,
     },
     input: { 
       flex: 1, 
@@ -634,13 +570,10 @@ const styles = StyleSheet.create({
 
     requestFooter: { 
       padding: 16, 
-      paddingBottom: 16, 
+      paddingBottom: 24, 
       borderTopWidth: 1, 
       borderTopColor: Colors.dark.border, 
       backgroundColor: Colors.dark.background 
-    },
-    requestFooterWithBottomSafeArea: {
-      paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     },
     requestFooterText: { 
       color: Colors.dark.text, 
@@ -669,17 +602,13 @@ const styles = StyleSheet.create({
       fontWeight: '600', 
       color: Colors.dark.text 
     },
-    // **NEW** Styles for the pending footer
+    // *NEW* Styles for the pending footer
     pendingFooter: {
       padding: 20,
-      paddingBottom: 20,
       borderTopWidth: 1,
       borderTopColor: Colors.dark.border,
       backgroundColor: Colors.dark.background,
       alignItems: 'center',
-    },
-    pendingFooterWithBottomSafeArea: {
-      paddingBottom: Platform.OS === 'ios' ? 44 : 20,
     },
     pendingFooterText: {
       color: Colors.dark.subtext,
