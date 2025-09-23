@@ -20,6 +20,8 @@ interface AuthState {
   init: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  sendEmailOTP: (email: string) => Promise<void>;
+  registerWithOTP: (name: string, email: string, password: string, otp: string) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
   refreshUserData: () => Promise<void>;
@@ -198,6 +200,163 @@ export const useAuthStore = create<AuthState>()(
             error: error.message || 'Registration failed. Please try again.',
             isLoading: false,
           })
+        }
+      },
+
+      sendEmailOTP: async (email) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          if (!email) {
+            throw new Error('Email is required');
+          }
+
+          const cleanEmail = String(email).trim();
+          
+          if (cleanEmail.length === 0) {
+            throw new Error('Email cannot be empty');
+          }
+          
+          const requestBody = { email: cleanEmail };
+
+          const response = await fetch(`${API_BASE_URL}/auth/sendEmail`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+
+          // Check if response is JSON
+          const contentType = response.headers.get('content-type');
+          let data;
+          
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            // Server returned HTML or other non-JSON response
+            const textResponse = await response.text();
+            console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            
+            if (response.status === 404) {
+              throw new Error('Email API endpoint not found. Please check if the sendEmail endpoint is implemented on the backend.');
+            } else if (response.status >= 500) {
+              throw new Error('Server error occurred. Please try again later or contact support.');
+            } else {
+              throw new Error(`Server returned unexpected response. Status: ${response.status}`);
+            }
+          }
+
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to send verification email');
+          }
+
+          set({ isLoading: false });
+
+        } catch (error: any) {
+          console.error('Send email OTP error:', error.message || error);
+          set({
+            error: error.message || 'Failed to send verification email. Please try again.',
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      registerWithOTP: async (name, email, password, otp) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          // Validate inputs first
+          if (!name || !email || !password || !otp) {
+            throw new Error('Name, email, password and OTP are required');
+          }
+
+          // Ensure all values are clean strings
+          const cleanName = String(name).trim();
+          const cleanEmail = String(email).trim();
+          const cleanPassword = String(password).trim();
+          const cleanOTP = String(otp).trim();
+           
+          // Validate after cleaning
+          if (cleanName.length === 0) {
+            throw new Error('Name cannot be empty');
+          }
+          if (cleanEmail.length === 0) {
+            throw new Error('Email cannot be empty');
+          }
+          if (cleanPassword.length === 0) {
+            throw new Error('Password cannot be empty');
+          }
+          if (cleanPassword.length < 6) {
+            throw new Error('Password must be at least 6 characters long');
+          }
+          if (cleanOTP.length !== 6) {
+            throw new Error('OTP must be 6 digits');
+          }
+          
+          const requestBody = {
+            name: cleanName,
+            email: cleanEmail,
+            password: cleanPassword,
+            confirmPassword: cleanPassword,
+            otp: cleanOTP,
+          };
+          
+          const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+          
+          // Check if response is JSON
+          const contentType = response.headers.get('content-type');
+          let data;
+          
+          if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+          } else {
+            // Server returned HTML or other non-JSON response
+            const textResponse = await response.text();
+            console.error('Server returned non-JSON response:', textResponse.substring(0, 200));
+            
+            if (response.status === 404) {
+              throw new Error('Signup API endpoint not found. Please check the backend implementation.');
+            } else if (response.status >= 500) {
+              throw new Error('Server error occurred during registration. Please try again later.');
+            } else {
+              throw new Error(`Server returned unexpected response. Status: ${response.status}`);
+            }
+          }
+          
+          if (!response.ok) {
+            throw new Error(data.message || 'Registration failed');
+          }
+
+          set({
+            user: data.user,
+            token: data.token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+
+          socketService.connect(data.token);
+
+          // Register for push notifications after successful registration
+          try {
+            await registerForPushNotificationsAsync(data.token);
+          } catch(e) {
+            console.error("Failed to register for push notifications during registration flow:", e);
+          }
+
+          await get().refreshUserData();
+
+        } catch (error: any) {
+          console.error('Registration with OTP error:', error.message || error);
+          set({
+            error: error.message || 'Registration failed. Please try again.',
+            isLoading: false,
+          });
         }
       },
 

@@ -6,24 +6,28 @@ import {
   TouchableOpacity, 
   KeyboardAvoidingView, 
   Platform,
-  ScrollView
+  ScrollView,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { User, Mail, Lock, ArrowRight } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import OTPVerification from '@/components/ui/OTPVerification';
 import { useAuthStore } from '@/store/auth-store';
 import Colors from '@/constants/colors';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { register, isLoading } = useAuthStore();
+  const { register, isLoading, sendEmailOTP, registerWithOTP, error } = useAuthStore();
   
+  const [step, setStep] = useState<'form' | 'verification'>('form');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isResending, setIsResending] = useState(false);
   const [errors, setErrors] = useState<{
     name?: string;
     email?: string;
@@ -74,24 +78,80 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (validateForm()) {
       try {
-        // Ensure clean strings are passed to register function
-        const cleanName = String(name || '').trim();
         const cleanEmail = String(email || '').trim();
-        const cleanPassword = String(password || '').replace(/[\r\n\t]/g, '').trim();
-        
-      
-        
-        await register(cleanName, cleanEmail, cleanPassword);
-        router.replace('/(tabs)');
-      } catch (error) {
+        await sendEmailOTP(cleanEmail);
+        // Success! Move to verification step
+        Alert.alert(
+          'Verification Code Sent', 
+          `We've sent a 6-digit verification code to ${cleanEmail}. Please check your email (including spam folder) and enter the code on the next screen.`,
+          [{ text: 'OK', onPress: () => setStep('verification') }]
+        );
+      } catch (error: any) {
         console.error('Registration error:', error);
+        // Error is handled by the auth store and displayed through error state
       }
     }
   };
 
+  const handleVerifyOTP = async (otp: string) => {
+    try {
+      const cleanName = String(name || '').trim();
+      const cleanEmail = String(email || '').trim();
+      const cleanPassword = String(password || '').replace(/[\r\n\t]/g, '').trim();
+      
+      await registerWithOTP(cleanName, cleanEmail, cleanPassword, otp);
+      router.replace('/(tabs)');
+    } catch (error) {
+      console.error('Registration error:', error);
+      // Error is handled by the auth store and displayed through error state
+    }
+  };
+
+  const handleResendOTP = async () => {
+    try {
+      setIsResending(true);
+      const cleanEmail = String(email || '').trim();
+      await sendEmailOTP(cleanEmail);
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleBackToForm = () => {
+    setStep('form');
+  };
+
+
   const handleLogin = () => {
     router.push('/login');
   };
+
+  // Show error alert if there's an error from the auth store
+  React.useEffect(() => {
+    if (error) {
+      Alert.alert('Error', error);
+    }
+  }, [error]);
+
+  if (step === 'verification') {
+    return (
+      <LinearGradient
+        colors={['#121212', '#1E1E1E']}
+        style={styles.container}
+      >
+        <OTPVerification
+          email={email}
+          onVerify={handleVerifyOTP}
+          onResend={handleResendOTP}
+          onBack={handleBackToForm}
+          isLoading={isLoading}
+          isResending={isResending}
+        />
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient
@@ -155,7 +215,7 @@ export default function RegisterScreen() {
             />
             
             <Button
-              title="Create Account"
+              title="Send Verification Code"
               onPress={handleRegister}
               isLoading={isLoading}
               gradient
