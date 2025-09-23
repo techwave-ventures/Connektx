@@ -12,6 +12,7 @@ interface StoriesSectionProps {
   onStoryPress: (storyId: string, userStoriesGroup?: Story[], storyIndex?: number) => void;
   onAddStory: () => void;
   userStories: Story[];
+  fetchedStories?: any[]; // Real following users' stories
 }
 
 export const StoriesSection: React.FC<StoriesSectionProps> = ({
@@ -19,27 +20,50 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
   onStoryPress,
   onAddStory,
   userStories,
+  fetchedStories = [],
 }) => {
   const [showStoryFlow, setShowStoryFlow] = useState(false);
   const { user } = useAuthStore();
 
-  const safeStories = Array.isArray(stories) ? stories : [];
   const safeUserStories = Array.isArray(userStories) ? userStories : [];
-
-  const otherUserStories = safeStories.filter(story =>
-    story?.user?.id && user?.id && story.user.id !== user.id
-  );
-
-  const groupedStories = otherUserStories.reduce((acc, story) => {
-    const userId = story.user?.id;
-    if (!userId) return acc;
-
-    if (!acc[userId]) {
-      acc[userId] = [];
+  const safeFetchedStories = Array.isArray(fetchedStories) ? fetchedStories : [];
+  
+  // Use real following users' stories from fetchedStories instead of mock stories
+  // Filter out current user's own stories from following stories
+  const groupedStories = safeFetchedStories.reduce((acc, storyGroup) => {
+    if (!storyGroup?.user?.id || !storyGroup?.stories) return acc;
+    
+    const userId = storyGroup.user.id;
+    
+    // Skip if this is the current user's story group
+    if (user?.id && userId === user.id) {
+      console.log('🚫 Filtering out current user\'s story from following stories:', storyGroup.user.name);
+      return acc;
     }
-    acc[userId].push(story);
+    
+    // Convert the fetched story format to the expected Story format
+    const userStories = storyGroup.stories.map((story: any) => ({
+      id: story.id,
+      user: storyGroup.user,
+      url: story.url || story.image,
+      type: story.type || 'image',
+      viewed: story.viewed || false,
+      createdAt: story.createdAt,
+      overlayData: story.overlayData
+    }));
+    
+    acc[userId] = userStories;
     return acc;
   }, {} as Record<string, Story[]>);
+  
+  // Debug logging (after groupedStories is created)
+  console.log('📱 StoriesSection Debug:');
+  console.log('📊 Mock stories count:', stories?.length || 0);
+  console.log('👤 User stories count:', safeUserStories.length);
+  console.log('👥 Fetched following stories count (raw):', safeFetchedStories.length);
+  console.log('🚫 Following stories count (after filtering out own):', Object.keys(groupedStories).length);
+  console.log('📝 Current user ID:', user?.id);
+  console.log('🗂 Sample fetched story group:', safeFetchedStories.slice(0, 1));
 
   // New function to handle pressing the user's own story circle
   const handleViewUserStories = () => {
@@ -143,7 +167,10 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
         {Object.keys(groupedStories).length === 0 && safeUserStories.length === 0 && (
           <View style={styles.emptyStateContainer}>
             <Text style={styles.emptyStateText}>
-              Be the first to share a story!
+              {safeFetchedStories.length === 0 
+                ? "Follow someone to see their stories!"
+                : "Be the first to share a story!"
+              }
             </Text>
           </View>
         )}

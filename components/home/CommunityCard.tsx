@@ -405,8 +405,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: CONTAINER_PADDING,
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.dark.primary, // Community indicator
+  
   },
   communityHeader: {
     flexDirection: 'row',
@@ -474,9 +473,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
+  
   },
   actionButton: {
     flexDirection: 'row',

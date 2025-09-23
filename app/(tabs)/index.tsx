@@ -135,15 +135,23 @@ const HomeScreen = memo(() => {
 
   const fetchFollowingStories = async () => {
     try {
+      console.log('🚀 Fetching following users stories...');
       const response = await followingUserStory(token);
       const rawStories = response || [];
+      console.log('📊 Raw stories from API:', rawStories.length);
 
-      // Group stories by user
+      // Group stories by user (exclude current user's own stories)
       const groupedStories = rawStories.reduce((acc: any, story: any) => {
         const userId = story.userId._id;
         const userName = story.userId.name;
         const userAvatar = story.userId.profileImage || '';
         const userStreak = story.userId.streak || 0;
+        
+        // Skip current user's own stories
+        if (user?.id && userId === user.id) {
+          console.log('🚫 Filtering out current user\'s story from API response:', userName);
+          return acc;
+        }
 
         // Map the single story object to the desired format
         const mappedStory = {
@@ -176,6 +184,9 @@ const HomeScreen = memo(() => {
 
       // Convert the grouped object back into an array of story groups
       const storyGroups = Object.values(groupedStories);
+      
+      console.log('📝 Story groups created:', storyGroups.length);
+      console.log('🗂 Sample story group:', storyGroups[0]);
 
       setFetchedStories(storyGroups);
     } catch (err) {
