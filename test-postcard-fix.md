@@ -6,7 +6,7 @@
    - New API function to fetch a specific user by ID
    - Will try to fetch from `/user/{userId}` endpoint
 
-2. **Updated `fetchUserProfile` function** in `app/profile/[id].tsx`:
+2. **Updated `fetchUserProfile` function** in `app/profile/[userId].tsx`:
    - Now properly handles different user IDs
    - If viewing own profile: fetches current user's profile using existing `/user/getUser` endpoint
    - If viewing another user's profile: 
