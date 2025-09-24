@@ -3,8 +3,6 @@ import { safeSplit } from '../utils/safeSplit';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
-console.log('Community API: Base URL:', API_BASE_URL);
-
 
 export interface CreateCommunityData {
   name: string;
@@ -53,62 +51,118 @@ export const createCommunity = async (token: string, communityData: CreateCommun
     throw new Error('Community description is required');
   }
 
-  // Create FormData instead of JSON payload
-  const formData = new FormData();
-  
-  formData.append('name', communityData.name.trim());
-  formData.append('description', communityData.description.trim());
-  formData.append('isPrivate', String(!!communityData.isPrivate));
-  formData.append('requiresApproval', String(communityData.requiresApproval ?? false));
-
-  if (communityData.tags && communityData.tags.length > 0) {
-    const tags = Array.isArray(communityData.tags)
-      ? communityData.tags
-      : typeof communityData.tags === 'string'
-        ? safeSplit(communityData.tags, ',')
-        : [];
-    
-    // Append each tag individually for FormData
-    tags.forEach(tag => {
-      if (tag.trim()) {
-        formData.append('tags', tag.trim());
-      }
-    });
-  }
-
-  if (communityData.logo && communityData.logo.trim() !== '') {
-    formData.append('logo', communityData.logo.trim());
-  }
-  if (communityData.coverImage && communityData.coverImage.trim() !== '') {
-    formData.append('coverImage', communityData.coverImage.trim());
-  }
-  if (communityData.location && communityData.location.trim() !== '') {
-    formData.append('location', communityData.location.trim());
-  }
-
-  const response = await fetch(`${API_BASE_URL}/community`, {
-    method: 'POST',
-    headers: {
-      'token': token,
-      // Remove 'Content-Type' header to let the browser set it automatically for FormData
-    },
-    body: formData
-  });
-
-  const responseText = await response.text();
-  let data: any;
-  
   try {
-    data = JSON.parse(responseText);
-  } catch (parseError) {
-    throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
-  }
+    // Create FormData for proper file upload handling
+    const formData = new FormData();
+    
+    // Add basic text fields
+    formData.append('name', communityData.name.trim());
+    formData.append('description', communityData.description.trim());
+    formData.append('isPrivate', String(!!communityData.isPrivate));
+    formData.append('requiresApproval', String(communityData.requiresApproval ?? false));
 
-  if (!response.ok) {
-    throw new Error(data.message);
-  }
+    // Handle tags array
+    if (communityData.tags && communityData.tags.length > 0) {
+      const tags = Array.isArray(communityData.tags)
+        ? communityData.tags
+        : typeof communityData.tags === 'string'
+          ? safeSplit(communityData.tags, ',')
+          : [];
+      
+      // Send tags as JSON string since FormData doesn't handle arrays well
+      formData.append('tags', JSON.stringify(tags.filter(tag => tag.trim())));
+    }
 
-  return data;
+    // Handle location
+    if (communityData.location && communityData.location.trim() !== '') {
+      formData.append('location', communityData.location.trim());
+    }
+
+    // Handle logo file upload
+    if (communityData.logo && communityData.logo.trim() !== '') {
+      const logoUri = communityData.logo.trim();
+      
+      // Check if it's a local file URI that needs to be uploaded
+      if (logoUri.startsWith('file://') || logoUri.startsWith('content://')) {
+        try {
+          // Get file info for proper upload
+          const logoFileName = `logo_${Date.now()}.jpg`;
+          const logoFile = {
+            uri: logoUri,
+            name: logoFileName,
+            type: 'image/jpeg', // Default to JPEG, could be enhanced to detect actual type
+          } as any;
+          
+          formData.append('logo', logoFile);
+        } catch (logoError) {
+          // Skip logo if processing fails
+        }
+      } else {
+        // It's already a URL, send as text
+        formData.append('logo', logoUri);
+      }
+    }
+
+    // Handle cover image file upload
+    if (communityData.coverImage && communityData.coverImage.trim() !== '') {
+      const coverUri = communityData.coverImage.trim();
+      
+      // Check if it's a local file URI that needs to be uploaded
+      if (coverUri.startsWith('file://') || coverUri.startsWith('content://')) {
+        try {
+          // Get file info for proper upload
+          const coverFileName = `cover_${Date.now()}.jpg`;
+          const coverFile = {
+            uri: coverUri,
+            name: coverFileName,
+            type: 'image/jpeg', // Default to JPEG, could be enhanced to detect actual type
+          } as any;
+          
+          formData.append('coverImage', coverFile);
+        } catch (coverError) {
+          // Skip cover image if processing fails
+        }
+      } else {
+        // It's already a URL, send as text
+        formData.append('coverImage', coverUri);
+      }
+    }
+
+    const response = await fetch(`${API_BASE_URL}/community`, {
+      method: 'POST',
+      headers: {
+        'token': token,
+        // Don't set Content-Type for FormData - let the browser set it with boundary
+      },
+      body: formData
+    });
+
+    const responseText = await response.text();
+    
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Invalid JSON response from server: ${responseText.substring(0, 100)}`);
+    }
+
+    if (!response.ok) {
+      // Provide more detailed error message
+      const errorMessage = data?.message || `HTTP ${response.status}: ${response.statusText}`;
+      throw new Error(`Failed to create community: ${errorMessage}`);
+    }
+    
+    return data;
+    
+  } catch (error: any) {
+    // Check if this is a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
+    }
+    
+    // Re-throw the original error with more context
+    throw error;
+  }
 };
 
 export const getAllCommunities = async (token?: string, filters?: {
@@ -134,36 +188,25 @@ export const getAllCommunities = async (token?: string, filters?: {
       headers['token'] = token;
     }
 
-    console.log('getAllCommunities: Making request to:', `${API_BASE_URL}/community?${queryParams}`);
-    console.log('getAllCommunities: Headers:', headers);
-
     const response = await fetch(`${API_BASE_URL}/community?${queryParams}`, {
       method: 'GET',
       headers,
     });
 
-    console.log('getAllCommunities: Response status:', response.status);
-    
     let data: any;
     const responseText = await response.text();
-    console.log('getAllCommunities: Raw response:', responseText.substring(0, 200));
     
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('getAllCommunities: JSON parse error:', parseError);
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
     }
     
     if (!response.ok) {
-      console.error('getAllCommunities: API error:', data);
       throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
     }
-
-    console.log('getAllCommunities: Success, communities count:', data?.communities?.length || 0);
     return data;
   } catch (error) {
-    console.error('getAllCommunities: Network or other error:', error);
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
     }
@@ -190,13 +233,73 @@ export const getCommunityById = async (token: string, communityId: string) => {
 };
 
 export const updateCommunity = async (token: string, communityId: string, updates: Partial<CreateCommunityData>) => {
+  // Create FormData instead of JSON payload
+  const formData = new FormData();
+  
+  if (updates.name?.trim()) {
+    formData.append('name', updates.name.trim());
+  }
+  if (updates.description?.trim()) {
+    formData.append('description', updates.description.trim());
+  }
+  if (updates.isPrivate !== undefined) {
+    formData.append('isPrivate', String(!!updates.isPrivate));
+  }
+  if (updates.requiresApproval !== undefined) {
+    formData.append('requiresApproval', String(!!updates.requiresApproval));
+  }
+  if (updates.logo?.trim()) {
+    formData.append('logo', updates.logo.trim());
+  }
+  if (updates.coverImage?.trim()) {
+    formData.append('coverImage', updates.coverImage.trim());
+  }
+  if (updates.location?.trim()) {
+    formData.append('location', updates.location.trim());
+  }
+  if (updates.tags && updates.tags.length > 0) {
+    const tags = Array.isArray(updates.tags)
+      ? updates.tags
+      : typeof updates.tags === 'string'
+        ? safeSplit(updates.tags, ',')
+        : [];
+    
+    // Append each tag individually for FormData
+    tags.forEach(tag => {
+      if (tag.trim()) {
+        formData.append('tags', tag.trim());
+      }
+    });
+  }
+  if (updates.settings) {
+    // For settings object, we need to send each property individually
+    if (updates.settings.allowMemberPosts !== undefined) {
+      formData.append('allowMemberPosts', String(!!updates.settings.allowMemberPosts));
+    }
+    if (updates.settings.allowMemberEvents !== undefined) {
+      formData.append('allowMemberEvents', String(!!updates.settings.allowMemberEvents));
+    }
+    if (updates.settings.autoApproveJoins !== undefined) {
+      formData.append('autoApproveJoins', String(!!updates.settings.autoApproveJoins));
+    }
+    if (updates.settings.allowExternalSharing !== undefined) {
+      formData.append('allowExternalSharing', String(!!updates.settings.allowExternalSharing));
+    }
+    if (updates.settings.moderationLevel) {
+      formData.append('moderationLevel', updates.settings.moderationLevel);
+    }
+    if (updates.settings.welcomeMessage?.trim()) {
+      formData.append('welcomeMessage', updates.settings.welcomeMessage.trim());
+    }
+  }
+
   const response = await fetch(`${API_BASE_URL}/community/${communityId}`, {
     method: 'PUT',
     headers: {
       'token': token,
-      'Content-Type': 'application/json',
+      // Remove 'Content-Type' header to let the browser set it automatically for FormData
     },
-    body: JSON.stringify(updates),
+    body: formData,
   });
 
   const data = await response.json();
@@ -231,93 +334,40 @@ export const deleteCommunity = async (token: string, communityId: string) => {
 // ================================
 
 export const joinCommunity = async (token: string, communityId: string, message?: string) => {
-  console.log('🌐 [CommunityAPI] Starting joinCommunity API call...');
-  console.log('  Request details:', {
-    url: `${API_BASE_URL}/community/${communityId}/join`,
-    method: 'POST',
-    hasToken: !!token,
-    tokenLength: token?.length || 0,
-    tokenPrefix: token ? `${token.substring(0, 10)}...` : 'null',
-    communityId,
-    hasMessage: !!message,
-    messageLength: message?.length || 0,
-    timestamp: new Date().toISOString()
-  });
-  
   try {
-    console.log('  📡 Making HTTP request...');
-    const requestStartTime = Date.now();
-    
-    const requestBody = JSON.stringify({ message });
-    console.log('  Request body:', requestBody);
+    // Create FormData instead of JSON payload
+    const formData = new FormData();
+    if (message?.trim()) {
+      formData.append('message', message.trim());
+    }
     
     const response = await fetch(`${API_BASE_URL}/community/${communityId}/join`, {
       method: 'POST',
       headers: {
         'token': token,
-        'Content-Type': 'application/json',
+        // Remove 'Content-Type' header to let the browser set it automatically for FormData
       },
-      body: requestBody,
+      body: formData,
     });
     
-    const requestEndTime = Date.now();
-    console.log('  📈 Request completed:', {
-      duration: requestEndTime - requestStartTime,
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-    
-    console.log('  📄 Parsing response...');
     const responseText = await response.text();
-    console.log('    Raw response length:', responseText.length);
-    console.log('    Raw response preview:', responseText.substring(0, 200));
     
     let data: any;
     try {
       data = JSON.parse(responseText);
-      console.log('    Parsed JSON successfully:', {
-        hasData: !!data,
-        dataKeys: data ? Object.keys(data) : [],
-        hasCommunity: !!(data && data.community),
-        hasMessage: !!(data && data.message)
-      });
     } catch (parseError) {
-      console.error('    JSON parse failed:', parseError);
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
     }
     
     if (!response.ok) {
-      console.error('  ❌ API returned error status:', {
-        status: response.status,
-        statusText: response.statusText,
-        errorMessage: data.message || 'Unknown error',
-        fullResponse: data
-      });
       throw new Error(data.message || 'Failed to join community');
     }
-    
-    console.log('  ✅ [CommunityAPI] joinCommunity successful!');
-    console.log('    Response summary:', {
-      success: true,
-      communityUpdated: !!(data && data.community),
-      responseKeys: Object.keys(data || {})
-    });
     
     return data;
     
   } catch (error: any) {
-    console.error('  ❌ [CommunityAPI] joinCommunity failed:');
-    console.error('    Error type:', typeof error);
-    console.error('    Error name:', error?.name);
-    console.error('    Error message:', error?.message);
-    console.error('    Error stack:', error?.stack);
-    console.error('    Full error:', error);
-    
     // Check if this is a network error
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.error('    This appears to be a network connectivity error');
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
     }
     
@@ -350,9 +400,6 @@ export const getUserCommunities = async (token: string) => {
       throw new Error('Invalid or missing authentication token');
     }
 
-    console.log('getUserCommunities: Making request to:', `${API_BASE_URL}/community/user`);
-    console.log('getUserCommunities: Token present:', !!token);
-
     const response = await fetch(`${API_BASE_URL}/community/user`, {
       method: 'GET',
       headers: {
@@ -360,29 +407,22 @@ export const getUserCommunities = async (token: string) => {
         'Content-Type': 'application/json',
       },
     });
-
-    console.log('getUserCommunities: Response status:', response.status);
     
     let data: any;
     const responseText = await response.text();
-    console.log('getUserCommunities: Raw response:', responseText.substring(0, 200));
     
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('getUserCommunities: JSON parse error:', parseError);
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
     }
 
     if (!response.ok) {
-      console.error('getUserCommunities: API error:', data);
       throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    console.log('getUserCommunities: Success, user communities:', data);
     return data;
   } catch (error) {
-    console.error('getUserCommunities: Network or other error:', error);
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
     }
@@ -424,11 +464,6 @@ function getFileInfo(uri: string) {
 }
 
 export const createCommunityPostWithFiles = async (token: string, communityId: string, postData: CreatePostData & { imageUris?: string[] }) => {
-  console.log('🚀 [CommunityAPI] Starting createCommunityPostWithFiles...');
-  console.log('  Community ID:', communityId);
-  console.log('  Post Data:', JSON.stringify(postData, null, 2));
-  console.log('  Token present:', !!token);
-  
   if (!token || typeof token !== 'string' || token.trim() === '') {
     throw new Error('Authentication token is required to create a post');
   }
@@ -438,7 +473,6 @@ export const createCommunityPostWithFiles = async (token: string, communityId: s
   }
 
   const url = `${API_BASE_URL}/community/${communityId}/posts`;
-  console.log('  API URL:', url);
 
   try {
     const formData = new FormData();
@@ -453,7 +487,6 @@ export const createCommunityPostWithFiles = async (token: string, communityId: s
     if (postData.imageUris && postData.imageUris.length > 0) {
       postData.imageUris.forEach((uri, index) => {
         const { filename, mimeType } = getFileInfo(uri);
-        console.log(`  Adding image ${index + 1}:`, { uri, filename, mimeType });
         
         formData.append('images', {
           uri,
@@ -486,46 +519,26 @@ export const createCommunityPostWithFiles = async (token: string, communityId: s
       body: formData,
     });
 
-    console.log('  Response status:', response.status);
-    console.log('  Response statusText:', response.statusText);
-
     let data: any;
     const responseText = await response.text();
-    console.log('  Raw response:', responseText);
 
     try {
       data = JSON.parse(responseText);
-      console.log('  Parsed data:', data);
     } catch (parseError) {
-      console.error('  JSON parse error:', parseError);
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
     }
 
     if (!response.ok) {
-      console.error('  ❌ API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        message: data?.message,
-        fullData: data
-      });
       throw new Error(data?.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    console.log('  ✅ Post created successfully:', data);
     return data;
   } catch (error) {
-    console.error('  ❌ createCommunityPostWithFiles failed:', error);
     throw error;
   }
 };
 
 export const createCommunityPost = async (token: string, communityId: string, postData: CreatePostData) => {
-  console.log('🚀 [CommunityAPI] Starting createCommunityPost...');
-  console.log('  Community ID:', communityId);
-  console.log('  Post Data:', JSON.stringify(postData, null, 2));
-  console.log('  Token present:', !!token);
-  console.log('  Token length:', token?.length);
-  
   if (!token || typeof token !== 'string' || token.trim() === '') {
     throw new Error('Authentication token is required to create a post');
   }
@@ -535,7 +548,6 @@ export const createCommunityPost = async (token: string, communityId: string, po
   }
 
   const url = `${API_BASE_URL}/community/${communityId}/posts`;
-  console.log('  API URL:', url);
 
   try {
     // Create FormData instead of JSON payload
@@ -576,36 +588,21 @@ export const createCommunityPost = async (token: string, communityId: string, po
       body: formData,
     });
 
-    console.log('  Response status:', response.status);
-    console.log('  Response statusText:', response.statusText);
-    console.log('  Response headers:', Object.fromEntries(response.headers.entries()));
-
     let data: any;
     const responseText = await response.text();
-    console.log('  Raw response:', responseText);
 
     try {
       data = JSON.parse(responseText);
-      console.log('  Parsed data:', data);
     } catch (parseError) {
-      console.error('  JSON parse error:', parseError);
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
     }
 
     if (!response.ok) {
-      console.error('  ❌ API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        message: data?.message,
-        fullData: data
-      });
       throw new Error(data?.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    console.log('  ✅ Post created successfully:', data);
     return data;
   } catch (error) {
-    console.error('  ❌ createCommunityPost failed:', error);
     throw error;
   }
 };
@@ -616,11 +613,6 @@ export const getCommunityPosts = async (token: string, communityId: string, filt
   page?: number;
   limit?: number;
 }) => {
-  console.log('🔗 [CommunityAPI] getCommunityPosts called');
-  console.log('  Community ID:', communityId);
-  console.log('  Filters:', filters);
-  console.log('  Token present:', !!token);
-  
   if (!token || typeof token !== 'string' || token.trim() === '') {
     throw new Error('Authentication token is required to fetch community posts');
   }
@@ -637,7 +629,6 @@ export const getCommunityPosts = async (token: string, communityId: string, filt
   if (filters?.limit) queryParams.append('limit', filters.limit.toString());
 
   const url = `${API_BASE_URL}/community/${communityId}/posts?${queryParams}`;
-  console.log('  API URL:', url);
 
   try {
     const response = await fetch(url, {
@@ -648,37 +639,18 @@ export const getCommunityPosts = async (token: string, communityId: string, filt
       },
     });
 
-    console.log('  Response status:', response.status);
-    console.log('  Response statusText:', response.statusText);
-    console.log('  Response ok:', response.ok);
-
     let data: any;
     const responseText = await response.text();
-    console.log('  Raw response (first 200 chars):', responseText.substring(0, 200));
 
     try {
       data = responseText ? JSON.parse(responseText) : {};
-      console.log('  Parsed data structure:', {
-        success: data?.success,
-        postsCount: Array.isArray(data?.posts) ? data.posts.length : 'not array',
-        hasData: !!data,
-      });
     } catch (parseError) {
-      console.error('  JSON parse error:', parseError);
       throw new Error(`Invalid JSON response from community posts API: ${responseText.substring(0, 100)}`);
     }
     
     if (!response.ok) {
-      console.error('  ❌ API returned error:', {
-        status: response.status,
-        statusText: response.statusText,
-        message: data?.message || 'Unknown error',
-        fullData: data
-      });
-      
       // Check for the specific schema populate error
       if (data?.error && data.error.includes('Cannot populate path `comments.authorId`')) {
-        console.log('  ⚠️ Schema populate error detected, returning empty posts array');
         // Return a valid but empty response instead of throwing
         return { success: true, posts: [] };
       }
@@ -686,12 +658,9 @@ export const getCommunityPosts = async (token: string, communityId: string, filt
       throw new Error(data?.message || `HTTP ${response.status}: Failed to fetch community posts`);
     }
 
-    console.log('  ✅ getCommunityPosts successful!');
     return data;
     
   } catch (error: any) {
-    console.error('  ❌ getCommunityPosts failed:', error);
-    
     // Check if this is a network error
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
@@ -705,12 +674,6 @@ export const getCommunityPosts = async (token: string, communityId: string, filt
 
 
 export const likeCommunityPost = async (token: string, postId: string) => {
-  console.log('🎯 [CommunityAPI] Starting likeCommunityPost...');
-  console.log('  Post ID:', postId);
-  console.log('  Token present:', !!token);
-  console.log('  Token length:', token?.length);
-  console.log('  API URL:', `${API_BASE_URL}/community/posts/${postId}/like`);
-  
   if (!token || typeof token !== 'string' || token.trim() === '') {
     throw new Error('Authentication token is required to like a post');
   }
@@ -728,43 +691,26 @@ export const likeCommunityPost = async (token: string, postId: string) => {
       },
     });
 
-    console.log('  Response status:', response.status);
-    console.log('  Response statusText:', response.statusText);
-    console.log('  Response ok:', response.ok);
-
     const responseText = await response.text();
-    console.log('  Raw response:', responseText);
 
     let data: any;
     try {
       data = responseText ? JSON.parse(responseText) : {};
-      console.log('  Parsed data:', data);
     } catch (parseError) {
-      console.error('  JSON parse error:', parseError);
       // If response is successful but not JSON, treat as success
       if (response.ok) {
-        console.log('  ✅ Like successful (non-JSON response)');
         return { success: true, message: 'Post liked successfully' };
       }
       throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
     }
     
     if (!response.ok) {
-      console.error('  ❌ API returned error:', {
-        status: response.status,
-        statusText: response.statusText,
-        message: data?.message || 'Unknown error',
-        fullData: data
-      });
       throw new Error(data?.message || `HTTP ${response.status}: Failed to like post`);
     }
 
-    console.log('  ✅ Like successful!');
     return data || { success: true, message: 'Post liked successfully' };
     
   } catch (error: any) {
-    console.error('  ❌ likeCommunityPost failed:', error);
-    
     // Check if this is a network error
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
@@ -777,13 +723,17 @@ export const likeCommunityPost = async (token: string, postId: string) => {
 };
 
 export const addCommentToCommunityPost = async (token: string, postId: string, content: string) => {
+  // Create FormData instead of JSON payload
+  const formData = new FormData();
+  formData.append('content', content);
+
   const response = await fetch(`${API_BASE_URL}/community/posts/${postId}/comments`, {
     method: 'POST',
     headers: {
       'token': token,
-      'Content-Type': 'application/json',
+      // Remove 'Content-Type' header to let the browser set it automatically for FormData
     },
-    body: JSON.stringify({ content }),
+    body: formData,
   });
 
   const data = await response.json();
@@ -800,13 +750,17 @@ export const addCommentToCommunityPost = async (token: string, postId: string, c
 // ================================
 
 export const pinCommunityPost = async (token: string, postId: string, pin: boolean = true) => {
+  // Create FormData instead of JSON payload
+  const formData = new FormData();
+  formData.append('pin', String(pin));
+
   const response = await fetch(`${API_BASE_URL}/community/posts/${postId}/pin`, {
     method: 'POST',
     headers: {
       'token': token,
-      'Content-Type': 'application/json',
+      // Remove 'Content-Type' header to let the browser set it automatically for FormData
     },
-    body: JSON.stringify({ pin }),
+    body: formData,
   });
 
   const data = await response.json();
@@ -872,13 +826,17 @@ export const deleteCommunityPost = async (token: string, postId: string, communi
 // ================================
 
 export const handleJoinRequest = async (token: string, requestId: string, action: 'approve' | 'reject') => {
+  // Create FormData instead of JSON payload
+  const formData = new FormData();
+  formData.append('action', action);
+
   const response = await fetch(`${API_BASE_URL}/community/requests/${requestId}/handle`, {
     method: 'POST',
     headers: {
       'token': token,
-      'Content-Type': 'application/json',
+      // Remove 'Content-Type' header to let the browser set it automatically for FormData
     },
-    body: JSON.stringify({ action }),
+    body: formData,
   });
 
   const data = await response.json();
@@ -941,13 +899,17 @@ export const getCommunityMembers = async (token: string, communityId: string) =>
 };
 
 export const assignRole = async (token: string, communityId: string, memberId: string, role: 'admin' | 'moderator') => {
+  // Create FormData instead of JSON payload
+  const formData = new FormData();
+  formData.append('role', role);
+
   const response = await fetch(`${API_BASE_URL}/community/${communityId}/members/${memberId}/role`, {
     method: 'POST',
     headers: {
       'token': token,
-      'Content-Type': 'application/json',
+      // Remove 'Content-Type' header to let the browser set it automatically for FormData
     },
-    body: JSON.stringify({ role }),
+    body: formData,
   });
 
   const data = await response.json();
