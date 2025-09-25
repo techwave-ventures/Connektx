@@ -53,8 +53,20 @@ export default function NotificationsScreen() {
     // This part requires your routing structure to be set up
     switch (notification.type) {
       case 'like':
+        if (notification.postId?._id) {
+          router.push(`/post/${notification.postId._id}`);
+        }
+        break;
       case 'comment':
+        if (notification.postId?._id) {
+          router.push(`/post/${notification.postId._id}`);
+        }
+        break;
       case 'reply':
+        if (notification.postId?._id) {
+          router.push(`/post/${notification.postId._id}`);
+        }
+        break;
       case 'repost':
         if (notification.postId?._id) {
           router.push(`/post/${notification.postId._id}`);
