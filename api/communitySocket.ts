@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
 let socket: Socket | null = null;
 
