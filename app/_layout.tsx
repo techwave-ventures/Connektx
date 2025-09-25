@@ -158,7 +158,10 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="post/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="post/create" options={{ presentation: 'card' }} />
+      <Stack.Screen name="post/edit/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="profile/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="profile/edit" options={{ presentation: 'card' }} />
       <Stack.Screen name="profile/followers" options={{ presentation: 'card' }} />
       <Stack.Screen name="profile/following" options={{ presentation: 'card' }} />
       <Stack.Screen name="news/[id]" options={{ presentation: 'card' }} />

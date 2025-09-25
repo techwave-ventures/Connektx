@@ -46,19 +46,48 @@ export default function EditPostScreen() {
   const [visibility, setVisibility] = useState('public');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Find the post to edit
-  const postToEdit = posts.find(post => post.id === id);
+  // Find the post to edit with multiple ID comparison strategies
+  const postToEdit = posts.find(post => {
+    // Try exact match first
+    if (post.id === id) return true;
+    // Try string comparison
+    if (String(post.id) === String(id)) return true;
+    // Try number comparison if applicable
+    if (!isNaN(Number(id)) && post.id === Number(id)) return true;
+    // Try _id field if it exists
+    if ((post as any)._id && (post as any)._id === id) return true;
+    return false;
+  });
+  
+  // If not found in local store, try to fetch from API
+  const [fetchedPost, setFetchedPost] = useState<any>(null);
+  const { fetchPostById } = usePostStore();
+  
+  useEffect(() => {
+    if (!postToEdit && id && !fetchedPost) {
+      fetchPostById(id as string).then(post => {
+        if (post) {
+          setFetchedPost(post);
+        }
+      }).catch(error => {
+        console.error('Failed to fetch post:', error);
+      });
+    }
+  }, [postToEdit, id, fetchedPost, fetchPostById]);
+  
+  // Use either the store post or the fetched post
+  const finalPostToEdit = postToEdit || fetchedPost;
 
   useEffect(() => {
-    if (postToEdit) {
-      setPostText(postToEdit.content || '');
-      setImageUrls(postToEdit.images || []);
+    if (finalPostToEdit) {
+      setPostText(finalPostToEdit.content || '');
+      setImageUrls(finalPostToEdit.images || []);
       // You can set visibility from post data if available
     }
-  }, [postToEdit]);
+  }, [finalPostToEdit]);
 
   const handleBack = () => {
-    if (postToEdit && (postText !== postToEdit.content || JSON.stringify(imageUrls) !== JSON.stringify(postToEdit.images))) {
+    if (finalPostToEdit && (postText !== finalPostToEdit.content || JSON.stringify(imageUrls) !== JSON.stringify(finalPostToEdit.images))) {
       Alert.alert(
         'Discard Changes',
         'Are you sure you want to discard your changes?',
@@ -142,11 +171,13 @@ export default function EditPostScreen() {
     );
   }
 
-  if (!postToEdit) {
+  if (!finalPostToEdit) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Post not found</Text>
+          <Text style={styles.loadingText}>{
+            fetchedPost === null && !postToEdit ? 'Loading post...' : 'Post not found'
+          }</Text>
         </View>
       </SafeAreaView>
     );
