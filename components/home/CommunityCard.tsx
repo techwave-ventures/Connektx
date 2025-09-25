@@ -72,8 +72,18 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
   }, [post.id, bookmarkPost]);
   
   const handleComment = useCallback(() => {
-    router.push(`/post/${post.id}`);
-  }, [router, post.id]);
+    // Pass post data to avoid loading screen (similar to notifications)
+    console.log('✅ [CommunityCard] Navigating to post with data to avoid loading');
+    router.push({
+      pathname: `/post/${post.id}` as any,
+      params: {
+        postData: JSON.stringify({
+          ...post,
+          _fromCommunityCard: true // Add metadata to indicate source
+        })
+      }
+    });
+  }, [router, post]);
   
   const handleShare = useCallback(() => {
     setContentToShare({ id: post.id, type: 'post' });
@@ -114,7 +124,23 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     });
   };
 
-  const handleViewPost = () => onPress ? onPress() : router.push(`/post/${post.id}`);
+  const handleViewPost = useCallback(() => {
+    if (onPress) {
+      onPress();
+    } else {
+      // Pass post data to avoid loading screen (similar to notifications)
+      console.log('✅ [CommunityCard] Navigating to post with data to avoid loading');
+      router.push({
+        pathname: `/post/${post.id}` as any,
+        params: {
+          postData: JSON.stringify({
+            ...post,
+            _fromCommunityCard: true // Add metadata to indicate source
+          })
+        }
+      });
+    }
+  }, [onPress, router, post]);
   const handleImagePress = (imageUri: string, index: number) => {
     setSelectedImageIndex(index);
     setFullScreenVisible(true);
