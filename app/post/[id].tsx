@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -173,7 +173,7 @@ const MemoizedComment = memo(function MemoizedComment(props: MemoizedCommentProp
 });
 
 export default function PostDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, postData } = useLocalSearchParams<{ id: string; postData?: string }>();
   const router = useRouter();
   const { posts, likePost, bookmarkPost, addComment, likeComment, replyToComment, fetchComments, commentsByPostId, fetchPostById } = usePostStore();
   const { user } = useAuthStore();
@@ -181,6 +181,17 @@ export default function PostDetailScreen() {
   
   const [post, setPost] = useState<Post | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState(false);
+  
+  // Parse passed post data from navigation parameters
+  const passedPostData = useMemo(() => {
+    if (!postData) return null;
+    try {
+      return JSON.parse(postData as string);
+    } catch (error) {
+      console.error('❌ [PostDetail] Failed to parse passed post data:', error);
+      return null;
+    }
+  }, [postData]);
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; author: string } | null>(null);
   const [expandedComments, setExpandedComments] = useState<{ [key: string]: boolean }>({});
@@ -193,41 +204,77 @@ export default function PostDetailScreen() {
   const [contentToShare, setContentToShare] = useState<{ id: string; type: 'post' | 'news' } | null>(null);
 
   useEffect(() => {
-    console.log('🔍 [PostDetail] Searching for post with ID:', id);
-    console.log('📚 [PostDetail] Available posts in store:', posts.length);
+    console.log('🔍 [PostDetail] Starting post resolution for ID:', id);
+    console.log('📦 [PostDetail] Passed post data available:', !!passedPostData);
+    
+    if (!id) return;
+    
+    // Priority 1: Use passed post data from navigation (e.g., from notifications, post cards, etc.)
+    if (passedPostData && passedPostData.id === id) {
+      const navigationSource = passedPostData._fromNotification ? 'notification' :
+                               passedPostData._fromPostCard ? 'post card' :
+                               passedPostData._fromCommunityCard ? 'community card' :
+                               'unknown source';
+      
+      console.log(`⚡ [PostDetail] Using passed post data (from ${navigationSource}):`, { 
+        id: passedPostData.id, 
+        content: passedPostData.content?.substring(0, 30) + '...',
+        hasAuthor: !!passedPostData.author,
+        authorName: passedPostData.author?.name,
+        source: navigationSource
+      });
+      
+      setPost(passedPostData);
+      setIsLoadingPost(false);
+      
+      // Background fetch for fresh data and comments without showing loading
+      fetchComments(id);
+      fetchPostById(id).then(freshPost => {
+        if (freshPost && freshPost.id === id) {
+          console.log('🔄 [PostDetail] Updated with fresh data from API (background)');
+          setPost(freshPost);
+        }
+      }).catch(error => {
+        console.warn('⚠️ [PostDetail] Background fetch failed, keeping passed data:', error);
+      });
+      
+      return;
+    }
+    
+    // Priority 2: Look for post in store
+    console.log('📚 [PostDetail] Searching store - Available posts:', posts.length);
     console.log('📋 [PostDetail] Available post IDs:', posts.map(p => ({ id: p.id, title: p.content?.substring(0, 30) + '...' })));
     
     const foundPost = posts.find(p => p.id === id);
     if (foundPost) {
-      console.log('✅ [PostDetail] Post found in store:', { id: foundPost.id, author: foundPost.author.name });
+      console.log('✅ [PostDetail] Post found in store:', { id: foundPost.id, author: foundPost.author?.name });
       setPost(foundPost);
-    } else {
-      console.warn('❌ [PostDetail] Post not found in store for ID:', id);
-      console.log('🔄 [PostDetail] Attempting to fetch from API...');
-      
-      // Fetch the post from API if not found in store
-      if (id) {
-        setIsLoadingPost(true);
-        fetchPostById(id).then(fetchedPost => {
-          if (fetchedPost) {
-            console.log('✅ [PostDetail] Successfully fetched post from API:', fetchedPost.id);
-            setPost(fetchedPost);
-          } else {
-            console.error('❌ [PostDetail] Failed to fetch post from API');
-            // Post will remain null, showing the "Post not found" state
-          }
-        }).catch(error => {
-          console.error('❌ [PostDetail] Error fetching post from API:', error);
-        }).finally(() => {
-          setIsLoadingPost(false);
-        });
-      }
+      setIsLoadingPost(false);
+      fetchComments(id);
+      return;
     }
     
-    if (id) {
-      fetchComments(id);
-    }
-  }, [id, posts, fetchComments, fetchPostById]);
+    // Priority 3: Fetch from API with loading state
+    console.warn('❌ [PostDetail] Post not found in store, fetching from API with loading...');
+    setIsLoadingPost(true);
+    
+    fetchPostById(id).then(fetchedPost => {
+      if (fetchedPost) {
+        console.log('✅ [PostDetail] Successfully fetched post from API:', fetchedPost.id);
+        setPost(fetchedPost);
+      } else {
+        console.error('❌ [PostDetail] Failed to fetch post from API');
+        // Post will remain null, showing the "Post not found" state
+      }
+    }).catch(error => {
+      console.error('❌ [PostDetail] Error fetching post from API:', error);
+    }).finally(() => {
+      setIsLoadingPost(false);
+    });
+    
+    // Fetch comments regardless
+    fetchComments(id);
+  }, [id, passedPostData, posts, fetchComments, fetchPostById]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(

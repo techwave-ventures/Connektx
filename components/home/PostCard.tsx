@@ -120,8 +120,18 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   }, [post.id, bookmarkPost]);
   
   const handleComment = useCallback(() => {
-    router.push(`/post/${post.id}`);
-  }, [router, post.id]);
+    // Pass post data to avoid loading screen (similar to notifications)
+    console.log('✅ [PostCard] Navigating to post with data to avoid loading');
+    router.push({
+      pathname: `/post/${post.id}` as any,
+      params: {
+        postData: JSON.stringify({
+          ...post,
+          _fromPostCard: true // Add metadata to indicate source
+        })
+      }
+    });
+  }, [router, post]);
   
   // --- SOLUTION 3: Update handleShare to open the bottom sheet ---
   const handleShare = useCallback(() => {
@@ -156,7 +166,23 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
     });
   };
 
-  const handleViewPost = () => onPress ? onPress() : router.push(`/post/${post.id}`);
+  const handleViewPost = useCallback(() => {
+    if (onPress) {
+      onPress();
+    } else {
+      // Pass post data to avoid loading screen (similar to notifications)
+      console.log('✅ [PostCard] Navigating to post with data to avoid loading');
+      router.push({
+        pathname: `/post/${post.id}` as any,
+        params: {
+          postData: JSON.stringify({
+            ...post,
+            _fromPostCard: true // Add metadata to indicate source
+          })
+        }
+      });
+    }
+  }, [onPress, router, post]);
   const handleImagePress = (imageUri: string, index: number) => {
     setSelectedImageIndex(index);
     setFullScreenVisible(true);
@@ -380,7 +406,20 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
       {post.isReposted && post.originalPost && (
         <TouchableOpacity 
           style={styles.repostContainer}
-          onPress={() => router.push(`/post/${post?.originalPost?.id}`)}
+          onPress={() => {
+            // Pass original post data to avoid loading screen
+            console.log('✅ [PostCard] Navigating to original post with data');
+            router.push({
+              pathname: `/post/${post.originalPost.id}` as any,
+              params: {
+                postData: JSON.stringify({
+                  ...post.originalPost,
+                  _fromPostCard: true,
+                  _fromRepost: true // Additional metadata for reposts
+                })
+              }
+            });
+          }}
           activeOpacity={0.8}
         >
           {/* Repost indicator inside the repost container */}

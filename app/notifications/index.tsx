@@ -73,7 +73,35 @@ export default function NotificationsScreen() {
             
           console.log('📄 Navigating to post:', postId);
           if (postId) {
-            router.push(`/post/${postId}`);
+            // Create basic post object from notification data to avoid loading screen
+            const basicPost = {
+              id: postId,
+              content: typeof notification.postId === 'object' && notification.postId?.discription
+                ? notification.postId.discription
+                : 'Post content loading...',
+              images: typeof notification.postId === 'object' && notification.postId?.media
+                ? notification.postId.media
+                : [],
+              author: {
+                id: typeof notification.sender === 'object' ? notification.sender._id : notification.sender,
+                name: typeof notification.sender === 'object' ? notification.sender.name : 'Unknown User',
+                avatar: typeof notification.sender === 'object' ? notification.sender.profileImage : ''
+              },
+              createdAt: notification.createdAt,
+              likes: 0, // Default values - will be updated when fresh data is fetched
+              comments: 0,
+              isLiked: false,
+              isBookmarked: false,
+              _fromNotification: true // Metadata to indicate source
+            };
+            
+            console.log('✅ [Notification] Navigating to post with data to avoid loading');
+            router.push({
+              pathname: `/post/${postId}` as any,
+              params: {
+                postData: JSON.stringify(basicPost)
+              }
+            });
           } else {
             console.warn('⚠️ No valid postId found for notification:', notification.type);
             console.warn('⚠️ PostId structure:', notification.postId);
