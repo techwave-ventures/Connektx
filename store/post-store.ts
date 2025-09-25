@@ -1365,18 +1365,10 @@ fetchStories: async () => {
     try {
       
       // Try different possible API endpoints
-      const endpoints = [
-        { url: `${API_BASE}/post/updatePost`, method: 'POST' },
-        { url: `${API_BASE}/post/update`, method: 'POST' },
-        { url: `${API_BASE}/post/edit`, method: 'POST' },
-        { url: `${API_BASE}/post/${postId}`, method: 'PATCH' },
-        { url: `${API_BASE}/post/${postId}`, method: 'PUT' },
-        { url: `${API_BASE}/post/editPost`, method: 'POST' },
-      ];
+      const endpoint = `${API_BASE}/post/edit`;
       
       let lastError: Error | null = null;
       
-      for (let endpoint of endpoints) {
         try {
           
           const requestBody = {
@@ -1390,8 +1382,8 @@ fetchStories: async () => {
             text: postData.content
           };
           
-          const response = await fetch(endpoint.url, {
-            method: endpoint.method,
+          const response = await fetch(endpoint, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'token': token
@@ -1400,21 +1392,16 @@ fetchStories: async () => {
           });
           
           
-          if (response.status === 404) {
-            continue;
-          }
           
           if (!response.ok) {
             const errorText = await response.text();
             lastError = new Error(`API Error: ${response.status} - ${errorText}`);
-            continue;
           }
       
           const result = await response.json();
           
           if (!result.success) {
             lastError = new Error(result.message || 'Failed to edit post');
-            continue;
           }
           
           // Success! Update the post in the local state
@@ -1435,9 +1422,8 @@ fetchStories: async () => {
           
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
-          continue;
         }
-      }
+      
       
       // If we get here, all endpoints failed
       

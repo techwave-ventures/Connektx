@@ -32,6 +32,7 @@ import Button from '@/components/ui/Button';
 import { useAuthStore } from '@/store/auth-store';
 import { usePostStore } from '@/store/post-store';
 import Colors from '@/constants/colors';
+import useProfileData from '@/hooks/useProfileData';
 
 const { width } = Dimensions.get('window');
 
@@ -40,14 +41,19 @@ export default function EditPostScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); 
   const { user } = useAuthStore();
   const { posts, editPost } = usePostStore();
-  
+  const {     posts: userPosts , refresh } = useProfileData( {userId: user?.id || '',
+    isOwnProfile: true,
+    enableAutoRefresh: false, // Temporarily disable to isolate issue
+    cacheTimeout: 2 * 60 * 1000, // 2 minutes for own profile);
+  });
+
   const [postText, setPostText] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [visibility, setVisibility] = useState('public');
   const [isLoading, setIsLoading] = useState(false);
   
   // Find the post to edit with multiple ID comparison strategies
-  const postToEdit = posts.find(post => {
+  let postToEdit = posts.find(post => {
     // Try exact match first
     if (post.id === id) return true;
     // Try string comparison
@@ -58,36 +64,25 @@ export default function EditPostScreen() {
     if ((post as any)._id && (post as any)._id === id) return true;
     return false;
   });
+
+  console.log(postToEdit)
+  if (!postToEdit) {
+    postToEdit = userPosts.find( post => {
+      if (post.id === id) return true;
+    })
+  }
   
-  // If not found in local store, try to fetch from API
-  const [fetchedPost, setFetchedPost] = useState<any>(null);
-  const { fetchPostById } = usePostStore();
-  
-  useEffect(() => {
-    if (!postToEdit && id && !fetchedPost) {
-      fetchPostById(id as string).then(post => {
-        if (post) {
-          setFetchedPost(post);
-        }
-      }).catch(error => {
-        console.error('Failed to fetch post:', error);
-      });
-    }
-  }, [postToEdit, id, fetchedPost, fetchPostById]);
-  
-  // Use either the store post or the fetched post
-  const finalPostToEdit = postToEdit || fetchedPost;
 
   useEffect(() => {
-    if (finalPostToEdit) {
-      setPostText(finalPostToEdit.content || '');
-      setImageUrls(finalPostToEdit.images || []);
+    if (postToEdit) {
+      setPostText(postToEdit.content || '');
+      setImageUrls(postToEdit.images || []);
       // You can set visibility from post data if available
     }
-  }, [finalPostToEdit]);
+  }, [postToEdit]);
 
   const handleBack = () => {
-    if (finalPostToEdit && (postText !== finalPostToEdit.content || JSON.stringify(imageUrls) !== JSON.stringify(finalPostToEdit.images))) {
+    if (postToEdit && (postText !== postToEdit.content || JSON.stringify(imageUrls) !== JSON.stringify(postToEdit.images))) {
       Alert.alert(
         'Discard Changes',
         'Are you sure you want to discard your changes?',
@@ -149,6 +144,8 @@ export default function EditPostScreen() {
         visibility: visibility
       });
 
+      await refresh();
+
       Alert.alert(
         'Post Updated',
         'Your post has been updated successfully!',
@@ -171,13 +168,11 @@ export default function EditPostScreen() {
     );
   }
 
-  if (!finalPostToEdit) {
+  if (!postToEdit) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>{
-            fetchedPost === null && !postToEdit ? 'Loading post...' : 'Post not found'
-          }</Text>
+          <Text style={styles.loadingText}>Post not found</Text>
         </View>
       </SafeAreaView>
     );

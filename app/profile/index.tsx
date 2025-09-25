@@ -110,7 +110,7 @@ export default function ProfileScreen() {
     router.replace('/login');
   };
 
-  const handleEditProfile = () => {
+  const handleEditProfile =  () => {
     router.push('/profile/edit');
   };
 
