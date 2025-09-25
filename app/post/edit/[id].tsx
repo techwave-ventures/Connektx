@@ -1,3 +1,5 @@
+// app/post/edit/[id].tsx
+
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -35,7 +37,7 @@ const { width } = Dimensions.get('window');
 
 export default function EditPostScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>(); 
   const { user } = useAuthStore();
   const { posts, editPost } = usePostStore();
   

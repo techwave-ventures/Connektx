@@ -166,11 +166,8 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
 
   const handleEditPost = () => {
     setMenuVisible(false);
-    // Navigate to edit post screen with post ID
-    router.push({
-      pathname: '/post/edit',
-      params: { id: post.id }
-    });
+    // Navigate to the dynamic edit screen URL
+    router.push(`/post/edit/${post.id}`);
   };
 
   const handleDeletePost = () => {
