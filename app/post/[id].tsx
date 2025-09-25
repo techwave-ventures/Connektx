@@ -175,7 +175,7 @@ const MemoizedComment = memo(function MemoizedComment(props: MemoizedCommentProp
 export default function PostDetailScreen() {
   const { id, postData } = useLocalSearchParams<{ id: string; postData?: string }>();
   const router = useRouter();
-  const { posts, likePost, bookmarkPost, addComment, likeComment, replyToComment, fetchComments, commentsByPostId, fetchPostById } = usePostStore();
+  const { posts, likePost, unlikePost, bookmarkPost, addComment, likeComment, replyToComment, fetchComments, commentsByPostId, fetchPostById } = usePostStore();
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   
@@ -300,7 +300,13 @@ export default function PostDetailScreen() {
   };
 
   const handleLike = () => {
-    if (post) likePost(post.id);
+    if (post) {
+      if (!post?.isLiked) {
+        likePost(post.id);
+      } else {
+        unlikePost(post.id);
+      }
+    } 
   };
 
   const handleBookmark = () => {
