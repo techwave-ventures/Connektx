@@ -40,6 +40,7 @@ interface PostState {
   repostPost: (postId: string, comment?: string) => Promise<void>;
   unrepostPost: (postId: string) => Promise<void>;
   getPost: (postId: string) => Post | undefined;
+  fetchPostById: (postId: string) => Promise<Post | null>;
   votePoll: (postId: string, optionId: string) => Promise<void>;
 }
 
@@ -1610,6 +1611,180 @@ fetchStories: async () => {
   getPost: (postId) => {
     const state = get();
     return state.posts.find(post => post.id === postId);
+  },
+
+  fetchPostById: async (postId: string) => {
+    console.log('🔍 [PostStore] Fetching post by ID:', postId);
+    
+    // Check if post already exists in store
+    const existingPost = get().getPost(postId);
+    if (existingPost) {
+      console.log('✅ [PostStore] Post found in store:', existingPost.id);
+      return existingPost;
+    }
+    
+    const { token } = require('./auth-store').useAuthStore.getState();
+    if (!token) {
+      console.error('❌ [PostStore] No auth token available');
+      return null;
+    }
+    
+    set({ isLoading: true, error: null });
+    
+    try {
+      // Try multiple possible endpoints for fetching single post
+      const endpoints = [
+        `${API_BASE}/post/${postId}`,
+        `${API_BASE}/posts/${postId}`,
+        `${API_BASE}/post/getPost/${postId}`,
+        `${API_BASE}/post/details/${postId}`,
+        `${API_BASE}/post/getpost/${postId}`, // Alternative lowercase
+        `${API_BASE}/api/post/${postId}`, // With api prefix
+      ];
+      
+      let lastError: Error | null = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🌐 [PostStore] Trying endpoint: ${endpoint}`);
+          
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'token': token,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.status === 404) {
+            console.log(`⏭️ [PostStore] Endpoint ${endpoint} returned 404, trying next...`);
+            continue;
+          }
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            lastError = new Error(`HTTP ${response.status}: ${errorText}`);
+            console.log(`⚠️ [PostStore] Endpoint ${endpoint} failed: ${lastError.message}`);
+            continue;
+          }
+          
+          const data = await response.json();
+          console.log('📄 [PostStore] Raw response data structure:');
+          console.log('  - Top level keys:', Object.keys(data));
+          console.log('  - Full data:', JSON.stringify(data, null, 2));
+          
+          if (!data.success && !data.body && !data._id) {
+            lastError = new Error(data.message || 'Failed to fetch post');
+            console.log(`⚠️ [PostStore] Invalid response from ${endpoint}:`, data);
+            continue;
+          }
+          
+          // Handle different response structures
+          const postData = data.body || data.post || data;
+          
+          if (!postData) {
+            console.log(`⚠️ [PostStore] No post data in response from ${endpoint}`);
+            continue;
+          }
+          
+          console.log('🎯 [PostStore] Successfully fetched post data:', {
+            id: postData._id || postData.id,
+            content: postData.discription || postData.content,
+            rawAuthor: postData.author,
+            userId: postData.userId || postData.UserId,
+            authorName: postData.authorName,
+            authorAvatar: postData.authorAvatar,
+            user: postData.user
+          });
+          
+          // Map the API response to our Post format
+          let mappedPost = mapApiPostToPost(postData);
+          
+          if (!mappedPost) {
+            console.warn('⚠️ [PostStore] Failed to map post data');
+            continue;
+          }
+          
+          console.log('✅ [PostStore] Successfully mapped post:', mappedPost.id);
+          
+          // Try to enrich author data if it's incomplete
+          if (mappedPost.author && (mappedPost.author.name === 'Unknown User' || !mappedPost.author.profileImage)) {
+            console.log('💸 [PostStore] Author data incomplete, trying to fetch user details...');
+            
+            try {
+              const userId = mappedPost.author.id || mappedPost.author._id;
+              if (userId && userId !== 'unknown') {
+                const { getUserById } = require('../api/user');
+                const userResponse = await getUserById(token, userId);
+                
+                if (userResponse?.body) {
+                  console.log('✅ [PostStore] Successfully fetched user details:', userResponse.body.name);
+                  
+                  // Update the author with complete data
+                  mappedPost.author = {
+                    ...mappedPost.author,
+                    id: userResponse.body._id || userResponse.body.id || userId,
+                    _id: userResponse.body._id || userResponse.body.id || userId,
+                    name: userResponse.body.name || mappedPost.author.name,
+                    username: userResponse.body.username || (userResponse.body.name || 'user').toLowerCase().replace(/\s+/g, ''),
+                    email: userResponse.body.email || '',
+                    profileImage: userResponse.body.profileImage || userResponse.body.avatar || '',
+                    avatar: userResponse.body.avatar || userResponse.body.profileImage || '',
+                    headline: userResponse.body.headline || userResponse.body.bio || '',
+                  };
+                } else if (userResponse?.success && userResponse) {
+                  console.log('✅ [PostStore] Successfully fetched user details (alt format):', userResponse.name);
+                  
+                  // Handle different response format
+                  mappedPost.author = {
+                    ...mappedPost.author,
+                    id: userResponse._id || userResponse.id || userId,
+                    _id: userResponse._id || userResponse.id || userId,
+                    name: userResponse.name || mappedPost.author.name,
+                    username: userResponse.username || (userResponse.name || 'user').toLowerCase().replace(/\s+/g, ''),
+                    email: userResponse.email || '',
+                    profileImage: userResponse.profileImage || userResponse.avatar || '',
+                    avatar: userResponse.avatar || userResponse.profileImage || '',
+                    headline: userResponse.headline || userResponse.bio || '',
+                  };
+                }
+              }
+            } catch (userError) {
+              console.warn('⚠️ [PostStore] Failed to fetch user details (non-fatal):', userError);
+              // Continue with the post even if user enrichment fails
+            }
+          }
+          
+          // Add the fetched post to the store
+          set(state => ({
+            posts: [mappedPost, ...state.posts.filter(p => p.id !== mappedPost.id)], // Add to beginning, remove duplicates
+            isLoading: false,
+            error: null
+          }));
+          
+          return mappedPost;
+          
+        } catch (error) {
+          lastError = error as Error;
+          console.log(`❌ [PostStore] Error with endpoint ${endpoint}:`, error);
+          continue;
+        }
+      }
+      
+      // If all endpoints failed, throw the last error
+      console.error('❌ [PostStore] All endpoints failed for post:', postId);
+      throw lastError || new Error('Failed to fetch post from all endpoints');
+      
+    } catch (error) {
+      console.error('❌ [PostStore] Error fetching post by ID:', error);
+      
+      set({ 
+        isLoading: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch post' 
+      });
+      
+      return null;
+    }
   },
 
   votePoll: async (postId, optionId) => {

@@ -175,11 +175,12 @@ const MemoizedComment = memo(function MemoizedComment(props: MemoizedCommentProp
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { posts, likePost, bookmarkPost, addComment, likeComment, replyToComment, fetchComments, commentsByPostId } = usePostStore();
+  const { posts, likePost, bookmarkPost, addComment, likeComment, replyToComment, fetchComments, commentsByPostId, fetchPostById } = usePostStore();
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   
   const [post, setPost] = useState<Post | null>(null);
+  const [isLoadingPost, setIsLoadingPost] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; author: string } | null>(null);
   const [expandedComments, setExpandedComments] = useState<{ [key: string]: boolean }>({});
@@ -192,14 +193,41 @@ export default function PostDetailScreen() {
   const [contentToShare, setContentToShare] = useState<{ id: string; type: 'post' | 'news' } | null>(null);
 
   useEffect(() => {
+    console.log('🔍 [PostDetail] Searching for post with ID:', id);
+    console.log('📚 [PostDetail] Available posts in store:', posts.length);
+    console.log('📋 [PostDetail] Available post IDs:', posts.map(p => ({ id: p.id, title: p.content?.substring(0, 30) + '...' })));
+    
     const foundPost = posts.find(p => p.id === id);
     if (foundPost) {
+      console.log('✅ [PostDetail] Post found in store:', { id: foundPost.id, author: foundPost.author.name });
       setPost(foundPost);
+    } else {
+      console.warn('❌ [PostDetail] Post not found in store for ID:', id);
+      console.log('🔄 [PostDetail] Attempting to fetch from API...');
+      
+      // Fetch the post from API if not found in store
+      if (id) {
+        setIsLoadingPost(true);
+        fetchPostById(id).then(fetchedPost => {
+          if (fetchedPost) {
+            console.log('✅ [PostDetail] Successfully fetched post from API:', fetchedPost.id);
+            setPost(fetchedPost);
+          } else {
+            console.error('❌ [PostDetail] Failed to fetch post from API');
+            // Post will remain null, showing the "Post not found" state
+          }
+        }).catch(error => {
+          console.error('❌ [PostDetail] Error fetching post from API:', error);
+        }).finally(() => {
+          setIsLoadingPost(false);
+        });
+      }
     }
+    
     if (id) {
       fetchComments(id);
     }
-  }, [id, posts, fetchComments]);
+  }, [id, posts, fetchComments, fetchPostById]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -314,15 +342,31 @@ export default function PostDetailScreen() {
   if (!post) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <ArrowLeft size={24} color={Colors.dark.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Loading...</Text>
-          <View style={styles.headerRight} />
-        </View>
+        <Stack.Screen 
+          options={{
+            headerShown: true,
+            headerTitle: isLoadingPost ? 'Loading...' : 'Post Not Found',
+            headerStyle: { backgroundColor: Colors.dark.background },
+            headerTitleStyle: { color: Colors.dark.text, fontSize: 18, fontWeight: '600' },
+            headerLeft: () => (
+              <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+                <ArrowLeft size={24} color={Colors.dark.text} />
+              </TouchableOpacity>
+            ),
+          }} 
+        />
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading post...</Text>
+          {isLoadingPost ? (
+            <>
+              <Text style={styles.loadingText}>Loading post...</Text>
+              <Text style={styles.loadingSubText}>Fetching from server...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.loadingText}>Post not found</Text>
+              <Text style={styles.loadingSubText}>This post may have been deleted or doesn't exist.</Text>
+            </>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -547,6 +591,12 @@ const styles = StyleSheet.create({
   loadingText: {
     color: Colors.dark.text,
     fontSize: 16,
+  },
+  loadingSubText: {
+    color: Colors.dark.subtext,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   contentContainer: {
     flex: 1,

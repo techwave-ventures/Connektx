@@ -44,41 +44,63 @@ export default function NotificationsScreen() {
   };
 
   const handleNotificationPress = (notification: Notification) => {
+    console.log('📱 [In-App Notification] Notification pressed!');
+    console.log('📋 Notification type:', notification.type);
+    console.log('📄 Raw notification data:', JSON.stringify({
+      id: notification._id,
+      type: notification.type,
+      postId: notification.postId,
+      senderId: notification.sender?._id,
+      message: notification.message
+    }, null, 2));
+
     // Mark as read via the store
     if (!notification.read) {
         markAsRead(notification._id);
     }
     
-    // Navigate based on notification type
-    // This part requires your routing structure to be set up
-    switch (notification.type) {
-      case 'like':
-        if (notification.postId?._id) {
-          router.push(`/post/${notification.postId._id}`);
-        }
-        break;
-      case 'comment':
-        if (notification.postId?._id) {
-          router.push(`/post/${notification.postId._id}`);
-        }
-        break;
-      case 'reply':
-        if (notification.postId?._id) {
-          router.push(`/post/${notification.postId._id}`);
-        }
-        break;
-      case 'repost':
-        if (notification.postId?._id) {
-          router.push(`/post/${notification.postId._id}`);
-        }
-        break;
-      case 'follow':
-        if (notification.sender?._id) {
-          router.push(`/profile/${notification.sender._id}`);
-        }
-        break;
-      default:
-        break;
+    try {
+      // Navigate based on notification type
+      switch (notification.type) {
+        case 'like':
+        case 'comment':
+        case 'reply':
+        case 'repost':
+          // Handle postId as either string or object
+          const postId = typeof notification.postId === 'string'
+            ? notification.postId
+            : notification.postId?._id;
+            
+          console.log('📄 Navigating to post:', postId);
+          if (postId) {
+            router.push(`/post/${postId}`);
+          } else {
+            console.warn('⚠️ No valid postId found for notification:', notification.type);
+            console.warn('⚠️ PostId structure:', notification.postId);
+          }
+          break;
+          
+        case 'follow':
+          const senderId = typeof notification.sender === 'string'
+            ? notification.sender
+            : notification.sender?._id;
+            
+          console.log('👤 Navigating to profile:', senderId);
+          if (senderId) {
+            router.push(`/profile/${senderId}`);
+          } else {
+            console.warn('⚠️ No valid senderId found for follow notification');
+            console.warn('⚠️ Sender structure:', notification.sender);
+          }
+          break;
+          
+        default:
+          console.warn('⚠️ Unknown notification type:', notification.type);
+          break;
+      }
+    } catch (error) {
+      console.error('❌ Error navigating from notification:', error);
+      console.error('❌ Failed notification data:', notification);
     }
   };
 

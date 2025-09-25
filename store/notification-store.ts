@@ -9,14 +9,14 @@ export interface Notification {
     _id: string;
     name: string;
     profileImage: string;
-  };
+  } | string; // Allow sender to be either object or string
   type: 'like' | 'comment' | 'reply' | 'follow' | 'repost';
   message: string;
   postId?: {
     _id: string;
     discription: string;
     media: string[];
-  };
+  } | string; // Allow postId to be either object or string
   read: boolean;
   createdAt: string;
 }

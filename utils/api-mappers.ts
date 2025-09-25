@@ -32,35 +32,82 @@ export const safeGetContent = (apiObject: any): string => {
 export const safeGetAuthor = (apiPost: any): any => {
   if (!apiPost) return null;
 
-  // If author object exists, use it
-  if (apiPost.author) {
-    return {
+  // Debug author data processing (only log if no author found)
+  const hasAnyAuthorData = apiPost.author || apiPost.user || apiPost.userId || apiPost.UserId || apiPost.authorName;
+  if (!hasAnyAuthorData) {
+    console.log('👤 [API Mapper] No author data found in post:', {
+      hasAuthor: !!apiPost.author,
+      hasUser: !!apiPost.user,
+      hasUserId: !!apiPost.userId,
+      hasUserIdCap: !!apiPost.UserId,
+      hasAuthorName: !!apiPost.authorName
+    });
+  }
+
+  // Priority 1: If full author object exists, use it
+  if (apiPost.author && typeof apiPost.author === 'object') {
+    const author = {
       id: safeGetId(apiPost.author),
       _id: safeGetId(apiPost.author),
-      name: apiPost.author.name || 'Unknown',
-      username: apiPost.author.username || (apiPost.author.name || 'user').toLowerCase().replace(/\\s+/g, ''),
+      name: apiPost.author.name || apiPost.author.username || 'Unknown User',
+      username: apiPost.author.username || (apiPost.author.name || 'user').toLowerCase().replace(/\s+/g, ''),
       email: apiPost.author.email || '',
       profileImage: apiPost.author.profileImage || apiPost.author.avatar || '',
       avatar: apiPost.author.avatar || apiPost.author.profileImage || '',
       headline: apiPost.author.headline || apiPost.author.bio || '',
     };
+    console.log('✅ [API Mapper] Using full author object:', author.name);
+    return author;
   }
 
-  // Handle cases where author info is in different fields
-  if (apiPost.UserId || apiPost.userId || apiPost.authorName || apiPost.user) {
-    return {
-      id: safeGetId({ _id: apiPost.UserId || apiPost.userId || apiPost.user }),
-      _id: safeGetId({ _id: apiPost.UserId || apiPost.userId || apiPost.user }),
-      name: apiPost.authorName || 'Unknown',
-      username: (apiPost.authorName || 'user').toLowerCase().replace(/\\s+/g, ''),
+  // Priority 2: If user object exists, use it
+  if (apiPost.user && typeof apiPost.user === 'object') {
+    const author = {
+      id: safeGetId(apiPost.user),
+      _id: safeGetId(apiPost.user),
+      name: apiPost.user.name || apiPost.user.username || 'Unknown User',
+      username: apiPost.user.username || (apiPost.user.name || 'user').toLowerCase().replace(/\s+/g, ''),
+      email: apiPost.user.email || '',
+      profileImage: apiPost.user.profileImage || apiPost.user.avatar || '',
+      avatar: apiPost.user.avatar || apiPost.user.profileImage || '',
+      headline: apiPost.user.headline || apiPost.user.bio || '',
+    };
+    console.log('✅ [API Mapper] Using user object as author:', author.name);
+    return author;
+  }
+
+  // Priority 3: Handle cases where author info is in separate fields
+  if (apiPost.UserId || apiPost.userId || apiPost.authorName) {
+    const author = {
+      id: apiPost.UserId || apiPost.userId || 'unknown',
+      _id: apiPost.UserId || apiPost.userId || 'unknown',
+      name: apiPost.authorName || 'Unknown User',
+      username: (apiPost.authorName || 'user').toLowerCase().replace(/\s+/g, ''),
       email: '',
       profileImage: apiPost.authorAvatar || '',
       avatar: apiPost.authorAvatar || '',
       headline: '',
     };
+    // Only log if we have incomplete data
+    if (!apiPost.authorName || !apiPost.authorAvatar) {
+      console.log('⚠️ [API Mapper] Using incomplete separate author fields:', author.name);
+    }
+    return author;
   }
 
-  return null;
+  console.warn('⚠️ [API Mapper] No author data found in post, creating fallback author');
+  
+  // Create a fallback author using any available data
+  return {
+    id: apiPost.createdBy || apiPost.ownerId || 'unknown',
+    _id: apiPost.createdBy || apiPost.ownerId || 'unknown',
+    name: apiPost.ownerName || apiPost.createdByName || 'Unknown User',
+    username: (apiPost.ownerName || apiPost.createdByName || 'unknown').toLowerCase().replace(/\s+/g, ''),
+    email: '',
+    profileImage: '',
+    avatar: '',
+    headline: '',
+  };
 };
 
 /**
@@ -98,9 +145,13 @@ export const safeGetCommentsCount = (apiPost: any): number => {
 export const safeGetImages = (apiPost: any): string[] => {
   if (!apiPost) return [];
   
+  // Handle various image field names
   if (Array.isArray(apiPost.images)) return apiPost.images;
+  if (Array.isArray(apiPost.media)) return apiPost.media;
+  if (Array.isArray(apiPost.imageUrls)) return apiPost.imageUrls;
   if (typeof apiPost.images === 'string') return [apiPost.images];
   if (typeof apiPost.image === 'string') return [apiPost.image];
+  if (typeof apiPost.media === 'string') return [apiPost.media];
   
   return [];
 };
@@ -141,30 +192,26 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
                           apiPost.communityId || 
                           (apiPost.community && apiPost.community.id);
 
+  console.log('🗺️ [API Mapper] Starting post mapping for:', postId);
+
+  // Get author information using the robust author mapper
+  const author = safeGetAuthor(apiPost);
+  
   // Build simplified mapped post
   return {
     id: postId,
     // Handle description typo in API
-    content: apiPost.description || apiPost.discription || apiPost.content || '',
-    // Handle author - convert UserId/userId/authorName/authorAvatar to author object
-    author: (apiPost.UserId || apiPost.userId) ? {
-      id: apiPost.UserId || apiPost.userId,
-      _id: apiPost.UserId || apiPost.userId,
-      name: apiPost.authorName || 'Unknown User',
-      username: (apiPost.authorName || 'user').toLowerCase().replace(/\s+/g, ''),
-      email: '',
-      profileImage: apiPost.authorAvatar || '',
-      avatar: apiPost.authorAvatar || '',
-      headline: '',
-    } : (apiPost.author || null),
+    content: safeGetContent(apiPost),
+    // Use the robust author mapper
+    author: author,
     communityId: apiPost.communityId || null,
     createdAt: apiPost.createdAt || new Date().toISOString(),
     type: apiPost.type || 'Community',
-    images: Array.isArray(apiPost.images) ? apiPost.images : [],
-    likes: typeof apiPost.likes === 'number' ? apiPost.likes : 0,
-    comments: typeof apiPost.comments === 'number' ? apiPost.comments : 0,
+    images: safeGetImages(apiPost),
+    likes: safeGetLikesCount(apiPost),
+    comments: safeGetCommentsCount(apiPost),
     reposts: apiPost.reposts || 0,
-    isLiked: apiPost.isLiked || false,
+    isLiked: safeGetIsLiked(apiPost),
     isBookmarked: apiPost.isBookmarked || false,
     isReposted: apiPost.isReposted || false,
     commentsList: Array.isArray(apiPost.commentsList) ? apiPost.commentsList : [],
