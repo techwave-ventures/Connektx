@@ -95,46 +95,18 @@ function useNotificationObserver() {
       const notification = response.notification;
       // The 'data' payload is where our custom backend data lives
       const data = notification.request.content.data as {
-        postId?: string | { _id: string };
-        senderId?: string | { _id: string };
+        postId?: string;
+        senderId?: string;
         notificationType?: 'follow' | 'like' | 'comment' | 'repost' | 'reply';
       };
       
-      console.log('🔔 [Push Notification] Notification tapped!');
-      console.log('📱 Raw notification data:', JSON.stringify(data, null, 2));
-      console.log('📋 Notification type:', data.notificationType);
+      console.log('Notification tapped, navigation data:', data);
 
-      try {
-        // Navigate based on the data payload
-        if (data.notificationType === 'follow') {
-          // Handle senderId as either string or object
-          const senderId = typeof data.senderId === 'string' 
-            ? data.senderId 
-            : data.senderId?._id;
-            
-          console.log('👤 Navigating to profile:', senderId);
-          if (senderId) {
-            router.push(`/profile/${senderId}`);
-          } else {
-            console.warn('⚠️ No senderId found for follow notification');
-          }
-        } else if (data.postId) {
-          // Handle postId as either string or object
-          const postId = typeof data.postId === 'string' 
-            ? data.postId 
-            : data.postId?._id;
-            
-          console.log('📄 Navigating to post:', postId);
-          if (postId) {
-            router.push(`/post/${postId}`);
-          } else {
-            console.warn('⚠️ No valid postId found in notification data');
-          }
-        } else {
-          console.warn('⚠️ No navigation target found in notification data');
-        }
-      } catch (error) {
-        console.error('❌ Error handling notification navigation:', error);
+      // Navigate based on the data payload
+      if (data.notificationType === 'follow' && data.senderId) {
+        router.push(`/profile/${data.senderId}`);
+      } else if (data.postId) {
+        router.push(`/post/${data.postId}`);
       }
     }
 
@@ -186,7 +158,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="post/[id]" options={{ presentation: 'card' }} />
-      <Stack.Screen name="profile/[userId]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="profile/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="profile/followers" options={{ presentation: 'card' }} />
       <Stack.Screen name="profile/following" options={{ presentation: 'card' }} />
       <Stack.Screen name="news/[id]" options={{ presentation: 'card' }} />
