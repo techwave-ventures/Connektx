@@ -769,29 +769,6 @@ export default function EventsScreen() {
               initialNumToRender={3}
               scrollEnabled={false}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={() => (
-                <View style={styles.emptyStateContainer}>
-                  <Text style={styles.emptyStateText}>
-                    {selectedDate === 'all' 
-                      ? 'No events found'
-                      : `No events found for ${dateOptions.find(opt => opt.id === selectedDate)?.label || selectedDate}`
-                    }
-                  </Text>
-                  {selectedDate === 'all' ? (
-                    <Button 
-                      title="Create Event" 
-                      onPress={handleCreateEvent}
-                      style={styles.exploreButton}
-                    />
-                  ) : (
-                    <Button 
-                      title="View All Events" 
-                      onPress={() => handleDateSelect('all')}
-                      style={styles.exploreButton}
-                    />
-                  )}
-                </View>
-              )}
             />
           </Animated.ScrollView>
         );
