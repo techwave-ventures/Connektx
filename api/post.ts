@@ -61,7 +61,7 @@ export interface PostsResponse {
 // ================================
 
 /**
- * Fetch posts from the API - This implements the requested post/getposts endpoint logic
+ * Fetch posts from the API - This implements the backend /post/getPosts endpoint
  * @param token - User authentication token
  * @param filter - Optional filter for posts ('trending', 'latest', etc.)
  * @param page - Optional page number for pagination
@@ -82,19 +82,19 @@ export async function getPosts(
 
     const page = options?.page || 1;
     const limit = options?.limit || 10;
-    const filter = options?.filter === 'latest' ? '1' : '0';
+    const offset = (page - 1) * limit; // Convert page to offset for backend
 
-    const response = await fetch(`${API_BASE}/post/getposts`, {
+    // Backend getPosts expects POST request with limit and offset query parameters
+    const url = new URL(`${API_BASE}/post/getPosts`);
+    url.searchParams.append('limit', limit.toString());
+    url.searchParams.append('offset', offset.toString());
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: {
         'token': token,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        filter: filter,
-        page: page,
-        limit: limit
-      }),
     });
 
     if (!response.ok) {
@@ -109,17 +109,17 @@ export async function getPosts(
     }
 
     const posts = data.body || [];
-    const totalPosts = data.total || posts.length;
-    const totalPages = Math.ceil(totalPosts / limit);
-    const hasNextPage = page < totalPages;
+    // Backend doesn't provide total count, so we estimate based on returned posts
+    // If we got fewer posts than requested, assume we're at the end
+    const hasNextPage = posts.length === limit;
 
     return {
       success: true,
       posts: posts,
       pagination: {
         currentPage: page,
-        totalPages: totalPages,
-        totalPosts: totalPosts,
+        totalPages: hasNextPage ? page + 1 : page, // Conservative estimate
+        totalPosts: hasNextPage ? (page * limit) + 1 : (page - 1) * limit + posts.length,
         hasNextPage: hasNextPage,
         limit: limit
       },
@@ -132,7 +132,7 @@ export async function getPosts(
 }
 
 /**
- * Get all posts (alternative endpoint)
+ * Get all posts (alternative endpoint) - matches backend getAllPosts
  */
 export async function getAllPosts(
   token: string, 
@@ -147,10 +147,9 @@ export async function getAllPosts(
     const page = options?.page || 1;
     const limit = options?.limit || 10;
     
-    const url = new URL(`${API_BASE}/post/all/allPosts/`);
+    // Backend getAllPosts expects filter as query parameter only
+    const url = new URL(`${API_BASE}/post/all/allPosts`);
     url.searchParams.append('filter', filterParam);
-    url.searchParams.append('page', page.toString());
-    url.searchParams.append('limit', limit.toString());
     
     const response = await fetch(url.toString(), {
       method: 'GET',
@@ -172,13 +171,19 @@ export async function getAllPosts(
     }
 
     const posts = data.body || [];
-    const totalPosts = data.total || posts.length;
+    // Backend getAllPosts returns all posts without pagination
+    // We need to implement client-side pagination for consistency
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedPosts = posts.slice(startIndex, endIndex);
+    
+    const totalPosts = posts.length;
     const totalPages = Math.ceil(totalPosts / limit);
     const hasNextPage = page < totalPages;
 
     return {
       success: true,
-      posts: posts,
+      posts: paginatedPosts,
       pagination: {
         currentPage: page,
         totalPages: totalPages,

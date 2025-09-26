@@ -176,6 +176,9 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     return post;
   }, [post, communities]);
 
+  // State to force re-render when communities load
+  const [communityLoadTime, setCommunityLoadTime] = useState(0);
+  
   // Initialize communities if not already done (ensures we have community data)
   useEffect(() => {
     if (post.type === 'community' && communities.length === 0 && token) {
@@ -184,34 +187,88 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       });
     }
   }, [post.type, communities.length, token, initializeCommunities]);
+  
+  // Force re-render when communities are loaded to update any fallback names
+  useEffect(() => {
+    if (communities.length > 0) {
+      setCommunityLoadTime(Date.now());
+    }
+  }, [communities.length]);
 
-  // Get community info from enriched post, or use fallback only as last resort
+  // Get community info with immediate enrichment and robust fallback
   const communityInfo = useMemo(() => {
-    if (enrichedPost.community) {
-      return enrichedPost.community;
+    console.log(`🔍 [CommunityCard] Resolving community info for post ${post.id}:`, {
+      enrichedName: enrichedPost.community?.name,
+      originalName: post.community?.name,
+      communityId: post.community?.id,
+      communitiesLoaded: communities.length > 0,
+      communityLoadTime
+    });
+    
+    // IMMEDIATE ENRICHMENT: Try to get community from store first to prevent null display
+    let communityData = null;
+    
+    // 1. Check if enriched post has valid community data
+    if (enrichedPost.community?.name && 
+        enrichedPost.community.name !== 'null' && 
+        enrichedPost.community.name.trim() !== '') {
+      communityData = {
+        id: enrichedPost.community.id,
+        name: enrichedPost.community.name,
+        logo: enrichedPost.community.logo || null,
+        isPrivate: enrichedPost.community.isPrivate || false
+      };
+      console.log(`✅ [CommunityCard] Using enriched community data: "${communityData.name}"`);
     }
     
-    // If we still don't have community data, try to get it directly from store
-    if (post.community?.id && post.community.id !== 'unknown') {
+    // 2. If no enriched data, try original post community data
+    else if (post.community?.name && 
+             post.community.name !== 'null' && 
+             post.community.name.trim() !== '') {
+      communityData = {
+        id: post.community.id || 'unknown',
+        name: post.community.name,
+        logo: post.community.logo || null,
+        isPrivate: post.community.isPrivate || false
+      };
+      console.log(`✅ [CommunityCard] Using original post community data: "${communityData.name}"`);
+    }
+    
+    // 3. If we have community ID but no name, try to get from store immediately
+    else if (post.community?.id && post.community.id !== 'unknown') {
       const communityFromStore = getCommunityById(post.community.id);
-      if (communityFromStore) {
-        return {
+      if (communityFromStore?.name && 
+          communityFromStore.name !== 'null' && 
+          communityFromStore.name.trim() !== '') {
+        communityData = {
           id: communityFromStore.id,
           name: communityFromStore.name,
           logo: communityFromStore.logo || null,
-          isPrivate: communityFromStore.isPrivate
+          isPrivate: communityFromStore.isPrivate || false
         };
+        console.log(`✅ [CommunityCard] Using store lookup community data: "${communityData.name}"`);
       }
     }
     
-    // Last resort fallback - but now with more descriptive text
-    return {
-      id: post.community?.id || 'unknown',
-      name: post.community?.name || 'Loading Community...',
-      logo: post.community?.logo || null,
-      isPrivate: post.community?.isPrivate || false
-    };
-  }, [enrichedPost.community, post.community]);
+    // 4. Final fallback - use a generic but meaningful name
+    if (!communityData || !communityData.name || communityData.name === 'null') {
+      communityData = {
+        id: post.community?.id || 'unknown',
+        name: 'Community', // Never show null
+        logo: post.community?.logo || null,
+        isPrivate: post.community?.isPrivate || false
+      };
+      console.log('⚠️ [CommunityCard] Using fallback community name "Community" for post:', {
+        postId: post.id,
+        enrichedName: enrichedPost.community?.name,
+        originalName: post.community?.name,
+        communityId: post.community?.id,
+        storeHasCommunities: communities.length > 0
+      });
+    }
+    
+    return communityData;
+  }, [enrichedPost.community, post.community, communities, communityLoadTime, post.id]);
   
 
   return (
@@ -233,7 +290,28 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           )}
           <View style={styles.communityInfo}>
             <View style={styles.communityNameRow}>
-              <Text style={styles.communityName}>r/{communityInfo.name}</Text>
+            <Text style={styles.communityName}>
+              r/{(() => {
+                const name = communityInfo?.name;
+                // Aggressive null/undefined/empty check
+                if (!name || 
+                    name === 'null' || 
+                    name === 'undefined' || 
+                    name === null || 
+                    name === undefined || 
+                    (typeof name === 'string' && name.trim() === '')) {
+                  console.log('⚠️ [CommunityCard] Blocked null/empty community name display for:', {
+                    postId: post.id,
+                    communityInfoName: name,
+                    typeof: typeof name,
+                    originalCommunityName: post.community?.name,
+                    enrichedCommunityName: enrichedPost.community?.name
+                  });
+                  return 'Community';
+                }
+                return name;
+              })()}
+            </Text>
               {communityInfo.isPrivate ? (
                 <Lock size={14} color={Colors.dark.warning} />
               ) : (
