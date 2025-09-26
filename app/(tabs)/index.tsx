@@ -49,7 +49,7 @@ const HomeScreen = memo(() => {
     addStory 
   } = usePostStore();
   const { user, updateUser, token } = useAuthStore();
-  const { initializeCommunities } = useCommunityStore();
+  const { initializeCommunities, communities } = useCommunityStore();
   
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('latest');
@@ -59,6 +59,7 @@ const HomeScreen = memo(() => {
   const [fetchedStories, setFetchedStories] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [lastPostCreatedAt, setLastPostCreatedAt] = useState<number | null>(null);
+  const [communityRefreshTrigger, setCommunityRefreshTrigger] = useState(0);
   const insets = useSafeAreaInsets();
 
   // Calculate tab bar height to prevent content overlap
@@ -88,7 +89,11 @@ const HomeScreen = memo(() => {
             throw new Error('Invalid user response format');
           }
           
-          // Step 2: Fetch posts, stories, and communities in parallel
+          // Step 2: Initialize communities first, then fetch posts and stories
+          console.log('🏘️ Initializing communities...');
+          await initializeCommunities(token);
+          
+          // Step 3: Fetch posts, stories in parallel (communities now loaded)
           await Promise.all([
             refreshPosts(activeTab as 'latest' | 'trending'),
             fetchStories(),
@@ -107,6 +112,14 @@ const HomeScreen = memo(() => {
 
     fetchInitialData();
   }, [token]); // Only depend on token to prevent infinite loops
+  
+  // Force re-render when communities are loaded to update any fallback community names
+  useEffect(() => {
+    if (communities.length > 0) {
+      console.log('🏘️ Communities loaded, triggering post re-render to update community names');
+      setCommunityRefreshTrigger(Date.now());
+    }
+  }, [communities.length]);
 
   // Refresh posts when screen comes into focus (disabled to prevent auto-refresh after post creation)
   // Posts are automatically added to the feed when created via post store
@@ -284,14 +297,21 @@ const HomeScreen = memo(() => {
   }, [router]);
 
   const handleLoadMore = useCallback(() => {
+    console.log(`🔄 handleLoadMore called: hasNext=${hasNextPage}, isLoading=${isLoadingMore}, tab=${activeTab}`);
     if (hasNextPage && !isLoadingMore) {
+      console.log(`🚀 Triggering loadMorePosts for ${activeTab}`);
       loadMorePosts(activeTab as 'latest' | 'trending');
+    } else {
+      console.log(`⏸️ LoadMore blocked: hasNext=${hasNextPage}, isLoading=${isLoadingMore}`);
     }
-  }, [hasNextPage, isLoadingMore, activeTab]);
+  }, [hasNextPage, isLoadingMore, activeTab, loadMorePosts]);
 
   const handleEndReached = useCallback(() => {
-    // Throttle end reached calls
-    handleLoadMore();
+    console.log('🎯 onEndReached triggered');
+    // Add a small delay to throttle rapid end reached calls
+    setTimeout(() => {
+      handleLoadMore();
+    }, 100);
   }, [handleLoadMore]);
 
   // Ensure stories is always an array
@@ -327,7 +347,7 @@ const HomeScreen = memo(() => {
     </>
   );
 
-  const renderPost = ({ item }: { item: any }) => {
+  const renderPost = useCallback(({ item }: { item: any }) => {
     // Enrich community posts with complete community data before rendering
     const enrichedPost = item.type === 'community' ? enrichCommunityPosts([item])[0] : item;
     
@@ -341,13 +361,13 @@ const HomeScreen = memo(() => {
         }
       >
         {enrichedPost.type === 'community' ? (
-          <CommunityCard post={enrichedPost} />
+          <CommunityCard post={enrichedPost} key={`community-${item.id || item._id}-${communityRefreshTrigger}`} />
         ) : (
           <PostCard post={enrichedPost} />
         )}
       </ErrorBoundary>
     );
-  };
+  }, [communityRefreshTrigger]);
 
   const renderSkeletonPosts = () => {
     return Array.from({ length: 3 }).map((_, index) => (
@@ -422,16 +442,17 @@ const HomeScreen = memo(() => {
               />
             }
             onEndReached={handleEndReached}
-            onEndReachedThreshold={0.3}
+            onEndReachedThreshold={0.5}
             removeClippedSubviews={false}
-            maxToRenderPerBatch={5}
-            initialNumToRender={3}
+            maxToRenderPerBatch={10}
+            initialNumToRender={5}
             windowSize={10}
-            updateCellsBatchingPeriod={100}
+            updateCellsBatchingPeriod={50}
             maintainVisibleContentPosition={{
               minIndexForVisible: 0,
             }}
             scrollEventThrottle={16}
+            getItemLayout={undefined} // Let FlatList calculate item layout dynamically
           />
         )}
         

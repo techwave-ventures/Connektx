@@ -196,31 +196,84 @@ function mapApiPostToPost(apiPost: any) {
   const mappedPost = robustMapApiPostToPost(apiPost, currentUserId);
   if (!mappedPost) return null;
 
-  // Add reverse community lookup for community posts that lack community info
-  if (mappedPost.type === 'community' && (!mappedPost.community?.name || mappedPost.community.id === 'unknown')) {
+  // AGGRESSIVE COMMUNITY ENRICHMENT for community posts
+  if (mappedPost.type === 'community') {
     try {
       const { useCommunityStore } = require('./community-store');
       const communities = useCommunityStore.getState().communities || [];
       
-      // Find which community contains this post
-      const parentCommunity = communities.find((community: any) => 
-        Array.isArray(community.posts) && 
-        community.posts.some((post: any) => 
-          (typeof post === 'string' ? post === mappedPost.id : post.id === mappedPost.id)
-        )
-      );
+      console.log(`🔍 [Post Mapper] Community post ${mappedPost.id}: current community name "${mappedPost.community?.name}", available communities: ${communities.length}`);
       
-      if (parentCommunity) {
-        mappedPost.community = {
-          id: parentCommunity.id || parentCommunity._id,
-          name: parentCommunity.name,
-          logo: parentCommunity.logo,
-          isPrivate: parentCommunity.isPrivate || false,
-        };
-        console.log(`🔍 Reverse lookup found community "${parentCommunity.name}" for post ${mappedPost.id}`);
+      // Always try to enrich community data if we have communities loaded
+      if (communities.length > 0) {
+        let enrichedCommunity = null;
+        
+        // Method 1: Find by community ID if available
+        if (mappedPost.community?.id && mappedPost.community.id !== 'unknown') {
+          enrichedCommunity = communities.find((community: any) => 
+            community.id === mappedPost.community!.id || community._id === mappedPost.community!.id
+          );
+          if (enrichedCommunity) {
+            console.log(`✅ [Post Mapper] Found community by ID: "${enrichedCommunity.name}"`);
+          }
+        }
+        
+        // Method 2: Find by post membership if no ID match
+        if (!enrichedCommunity) {
+          enrichedCommunity = communities.find((community: any) => 
+            Array.isArray(community.posts) && 
+            community.posts.some((post: any) => 
+              (typeof post === 'string' ? post === mappedPost.id : 
+               post?.id === mappedPost.id || post?._id === mappedPost.id)
+            )
+          );
+          if (enrichedCommunity) {
+            console.log(`✅ [Post Mapper] Found community by post membership: "${enrichedCommunity.name}"`);
+          }
+        }
+        
+        // Method 3: If we have a valid community name but no ID, find by name
+        if (!enrichedCommunity && mappedPost.community?.name && 
+            mappedPost.community.name !== 'null' && 
+            mappedPost.community.name.trim() !== '') {
+          enrichedCommunity = communities.find((community: any) => 
+            community.name === mappedPost.community!.name
+          );
+          if (enrichedCommunity) {
+            console.log(`✅ [Post Mapper] Found community by name match: "${enrichedCommunity.name}"`);
+          }
+        }
+        
+        // Apply enriched community data
+        if (enrichedCommunity && enrichedCommunity.name && enrichedCommunity.name !== 'null') {
+          mappedPost.community = {
+            id: enrichedCommunity.id || enrichedCommunity._id,
+            name: enrichedCommunity.name,
+            logo: enrichedCommunity.logo || mappedPost.community?.logo || null,
+            isPrivate: enrichedCommunity.isPrivate || false,
+          };
+          console.log(`🔄 [Post Mapper] Enriched post ${mappedPost.id} with community "${enrichedCommunity.name}"`);
+        } else if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
+          // Set fallback if still no valid name
+          console.log(`⚠️ [Post Mapper] No community data found for post ${mappedPost.id}, using fallback`);
+          if (!mappedPost.community) mappedPost.community = {};
+          mappedPost.community.name = 'Community';
+        }
+      } else {
+        console.log(`⚠️ [Post Mapper] No communities loaded yet for post ${mappedPost.id}`);
+        // Ensure we never show null
+        if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
+          if (!mappedPost.community) mappedPost.community = {};
+          mappedPost.community.name = 'Community';
+        }
       }
     } catch (error) {
-      // Non-fatal error, continue without community info
+      console.error('Error enriching community post:', error);
+      // Ensure fallback
+      if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
+        if (!mappedPost.community) mappedPost.community = {};
+        mappedPost.community.name = 'Community';
+      }
     }
   }
 
@@ -282,15 +335,36 @@ export const usePostStore = create<PostState>((set, get) => ({
         totalPosts: 0
       };
       
-      // Get posts with pagination
+      // Use getAllPosts as primary endpoint due to backend routing conflict
+      // The getPosts endpoint has a routing issue where /:postId route captures /getPosts requests
       try {
-        const regularData = await PostAPI.getPosts(token, { filter, page, limit });
-        if (regularData && Array.isArray(regularData.posts)) {
-          const regularPosts = regularData.posts.map(mapApiPostToPost).filter(post => post !== null);
-          console.log(`Fetched ${regularPosts.length} regular posts (page ${page})`);
+        console.log(`🌐 Using getAllPosts API as primary (page ${page}, limit ${limit})`);
+        const regularData = await PostAPI.getAllPosts(token, filter, { page, limit });
+        
+        if (regularData?.success && Array.isArray(regularData.posts)) {
+          const regularPosts = regularData.posts.map((apiPost, index) => {
+            try {
+              const mappedPost = mapApiPostToPost(apiPost);
+              if (!mappedPost) {
+                console.warn(`⚠️ [Post Store] Skipping null post at index ${index}:`, apiPost);
+                return null;
+              }
+              if (!mappedPost.id || mappedPost.id === 'undefined') {
+                console.warn(`⚠️ [Post Store] Post has invalid ID at index ${index}:`, {
+                  id: mappedPost.id,
+                  hasContent: !!mappedPost.content
+                });
+              }
+              return mappedPost;
+            } catch (error) {
+              console.error(`❌ [Post Store] Error mapping post at index ${index}:`, error, apiPost);
+              return null;
+            }
+          }).filter(post => post !== null);
+          console.log(`✅ Fetched ${regularPosts.length} posts using getAllPosts (page ${page})`);
           allPosts = [...allPosts, ...regularPosts];
           
-          // Update pagination info from regular posts API response
+          // Update pagination info from API response
           if (regularData.pagination) {
             paginationInfo = {
               currentPage: regularData.pagination.currentPage,
@@ -298,32 +372,23 @@ export const usePostStore = create<PostState>((set, get) => ({
               totalPages: regularData.pagination.totalPages,
               totalPosts: regularData.pagination.totalPosts
             };
+            console.log(`📊 Pagination info: page ${paginationInfo.currentPage}/${paginationInfo.totalPages}, hasNext: ${paginationInfo.hasNextPage}`);
+          } else {
+            console.warn('⚠️ No pagination info returned from getAllPosts API, using client-side logic');
+            // Fallback pagination logic when backend doesn't provide pagination metadata
+            paginationInfo = {
+              currentPage: page,
+              hasNextPage: regularPosts.length === limit, // If we got full page, assume there might be more
+              totalPages: regularPosts.length === limit ? page + 1 : page,
+              totalPosts: (page - 1) * limit + regularPosts.length
+            };
           }
+        } else {
+          throw new Error('Invalid response format from getAllPosts API');
         }
-      } catch (regularPostsError) {
-        console.warn('Regular posts endpoint failed, trying fallback:', regularPostsError);
-        // Fallback to the original getAllPosts API
-        try {
-          const fallbackData = await PostAPI.getAllPosts(token, filter, { page, limit });
-          if (fallbackData?.success && Array.isArray(fallbackData.posts)) {
-            const fallbackPosts = fallbackData.posts.map(mapApiPostToPost).filter(post => post !== null);
-            console.log(`Fetched ${fallbackPosts.length} fallback posts (page ${page})`);
-            allPosts = [...allPosts, ...fallbackPosts];
-            
-            // Update pagination info from fallback API response
-            if (fallbackData.pagination) {
-              paginationInfo = {
-                currentPage: fallbackData.pagination.currentPage,
-                hasNextPage: fallbackData.pagination.hasNextPage,
-                totalPages: fallbackData.pagination.totalPages,
-                totalPosts: fallbackData.pagination.totalPosts
-              };
-            }
-          }
-        } catch (fallbackError) {
-          console.error('All post endpoints failed:', fallbackError);
-          throw new Error('Failed to fetch posts from all sources');
-        }
+      } catch (postsError) {
+        console.error('❌ getAllPosts endpoint failed:', postsError);
+        throw new Error(`Failed to fetch posts: ${postsError.message}`);
       }
       
       // Get community posts and integrate them (only if communities are loaded)
@@ -417,11 +482,20 @@ export const usePostStore = create<PostState>((set, get) => ({
   loadMorePosts: async (filter = 'latest') => {
     const state = get();
     
+    console.log(`🔄 loadMorePosts called: page ${state.currentPage}, hasNext: ${state.hasNextPage}, isLoading: ${state.isLoadingMore}`);
+    
     // Don't load more if already loading or no more pages
-    if (state.isLoadingMore || !state.hasNextPage) {
+    if (state.isLoadingMore) {
+      console.log('⏸️ Already loading more posts, skipping...');
       return;
     }
     
+    if (!state.hasNextPage) {
+      console.log('🚫 No more pages available, skipping loadMore');
+      return;
+    }
+    
+    console.log(`📄 Loading more posts (next page: ${state.currentPage + 1})`);
     await get().fetchPosts(filter, false); // false means append, not reset
   },
 

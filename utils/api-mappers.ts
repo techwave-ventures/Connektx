@@ -180,11 +180,23 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
     return null;
   }
 
-  // Handle both id formats
-  const postId = apiPost._id || apiPost.id;
-  if (!postId) {
-    console.warn('[API Mapper] Post missing valid ID, skipping:', apiPost);
-    return null;
+  // Handle both id formats with enhanced extraction
+  let postId = apiPost._id || apiPost.id;
+  
+  // Handle MongoDB ObjectId format
+  if (postId && typeof postId === 'object' && postId.$oid) {
+    postId = postId.$oid;
+  }
+  
+  // Generate fallback ID if still missing
+  if (!postId || postId === 'undefined' || postId === 'null') {
+    postId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.warn(`[API Mapper] Generated fallback ID for post:`, {
+      originalId: apiPost._id,
+      originalApiId: apiPost.id,
+      fallbackId: postId,
+      hasContent: !!apiPost.content || !!apiPost.discription
+    });
   }
 
   // Determine if this is a community post
@@ -217,12 +229,22 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
     commentsList: Array.isArray(apiPost.commentsList) ? apiPost.commentsList : [],
     originalPost: apiPost.originalPost || null,
     // Community info (will be enriched later if missing)
-    community: isCommunityPost ? {
-      id: apiPost.communityId || 'unknown',
-      name: apiPost.communityName || null,
-      logo: apiPost.communityLogo || null,
-      isPrivate: apiPost.isPrivate || false,
-    } : undefined,
+    community: isCommunityPost ? (() => {
+      const hasValidName = apiPost.communityName && apiPost.communityName !== 'null' && apiPost.communityName.trim() !== '';
+      if (!hasValidName) {
+        console.log(`⚠️ [API Mapper] Using fallback community name for post ${postId}:`, {
+          communityName: apiPost.communityName,
+          communityId: apiPost.communityId,
+          type: typeof apiPost.communityName
+        });
+      }
+      return {
+        id: apiPost.communityId || 'unknown',
+        name: hasValidName ? apiPost.communityName : 'Community',
+        logo: apiPost.communityLogo || null,
+        isPrivate: apiPost.isPrivate || false,
+      };
+    })() : undefined,
     // Poll data (if present)
     pollOptions: apiPost.pollOptions || undefined,
     totalVotes: apiPost.totalVotes || undefined,
