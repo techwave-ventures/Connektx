@@ -243,9 +243,37 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
           <View style={styles.authorInfo}>
             <View style={styles.authorNameRow}>
               <Text style={styles.authorName}>
-                {variant === 'communityDetail'
-                  ? post?.author.name
-                  : (post.community ? `r/${post.community.name}` : post?.author.name)}
+                {(() => {
+                  if (variant === 'communityDetail') {
+                    return post?.author.name;
+                  }
+                  
+                  // Debug community data
+                  if (post.community) {
+                    console.log(`🔍 [PostCard] Community check for post ${post.id}:`, {
+                      hasCommunity: !!post.community,
+                      communityName: post.community.name,
+                      nameType: typeof post.community.name,
+                      nameLength: post.community.name ? post.community.name.length : 0,
+                      trimmedLength: post.community.name ? post.community.name.trim().length : 0,
+                      isNull: post.community.name === null,
+                      isUndefined: post.community.name === undefined,
+                      isStringNull: post.community.name === 'null',
+                      willShowCommunity: !!(post.community.name && post.community.name !== 'null' && post.community.name !== null && post.community.name !== undefined && post.community.name.trim() !== '')
+                    });
+                    
+                    // Use comprehensive validation
+                    if (post.community.name && 
+                        post.community.name !== 'null' && 
+                        post.community.name !== null && 
+                        post.community.name !== undefined && 
+                        post.community.name.trim() !== '') {
+                      return `r/${post.community.name}`;
+                    }
+                  }
+                  
+                  return post?.author.name;
+                })()}
               </Text>
               {post.type === 'question' && (
                 <Badge 
@@ -304,7 +332,9 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
               )}
             </View>
             <Text style={styles.communityName}>
-              {variant === 'communityDetail' ? `r/${post.community.name}` : post?.author.name}
+              {variant === 'communityDetail' ? 
+                (post.community.name && post.community.name !== 'null' && post.community.name.trim() !== '' ? 
+                  `r/${post.community.name}` : 'r/Unknown') : post?.author.name}
             </Text>
             <View style={styles.communityPrivacyIndicator}>
               {post.community.isPrivate ? (

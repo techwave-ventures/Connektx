@@ -202,18 +202,21 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       originalName: post.community?.name,
       communityId: post.community?.id,
       communitiesLoaded: communities.length > 0,
-      communityLoadTime
+      communityLoadTime,
+      postType: post.type,
+      authorName: post.author?.name // Add for debugging
     });
     
-    // IMMEDIATE ENRICHMENT: Try to get community from store first to prevent null display
+    // AGGRESSIVE COMMUNITY NAME RESOLUTION: Try all possible sources
     let communityData = null;
     
     // 1. Check if enriched post has valid community data
     if (enrichedPost.community?.name && 
         enrichedPost.community.name !== 'null' && 
+        enrichedPost.community.name !== 'undefined' &&
         enrichedPost.community.name.trim() !== '') {
       communityData = {
-        id: enrichedPost.community.id,
+        id: enrichedPost.community.id || 'unknown',
         name: enrichedPost.community.name,
         logo: enrichedPost.community.logo || null,
         isPrivate: enrichedPost.community.isPrivate || false
@@ -224,6 +227,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     // 2. If no enriched data, try original post community data
     else if (post.community?.name && 
              post.community.name !== 'null' && 
+             post.community.name !== 'undefined' &&
              post.community.name.trim() !== '') {
       communityData = {
         id: post.community.id || 'unknown',
@@ -239,6 +243,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       const communityFromStore = getCommunityById(post.community.id);
       if (communityFromStore?.name && 
           communityFromStore.name !== 'null' && 
+          communityFromStore.name !== 'undefined' &&
           communityFromStore.name.trim() !== '') {
         communityData = {
           id: communityFromStore.id,
@@ -250,25 +255,79 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       }
     }
     
-    // 4. Final fallback - use a generic but meaningful name
-    if (!communityData || !communityData.name || communityData.name === 'null') {
+    // 4. AGGRESSIVE FALLBACK: Try to find ANY community from available communities
+    if (!communityData || !communityData.name || communityData.name === 'null' || communityData.name === 'undefined') {
+      // First try to find any community that contains this post
+      if (communities.length > 0) {
+        const foundCommunity = communities.find(community => {
+          if (!Array.isArray(community.posts)) return false;
+          return community.posts.some((communityPost: any) => {
+            const postId = typeof communityPost === 'string' ? communityPost : 
+                           (communityPost?.id || communityPost?._id);
+            return postId === post.id;
+          });
+        });
+        
+        if (foundCommunity?.name && foundCommunity.name !== 'null' && foundCommunity.name !== 'undefined') {
+          communityData = {
+            id: foundCommunity.id || foundCommunity._id,
+            name: foundCommunity.name,
+            logo: foundCommunity.logo || null,
+            isPrivate: foundCommunity.isPrivate || false
+          };
+          console.log(`✅ [CommunityCard] Found community by post lookup: "${communityData.name}"`);
+        } else {
+          // Use first available community as emergency fallback
+          const firstValidCommunity = communities.find(c => c.name && c.name !== 'null' && c.name !== 'undefined' && c.name.trim() !== '');
+          if (firstValidCommunity) {
+            communityData = {
+              id: firstValidCommunity.id || firstValidCommunity._id,
+              name: firstValidCommunity.name,
+              logo: firstValidCommunity.logo || null,
+              isPrivate: firstValidCommunity.isPrivate || false
+            };
+            console.log(`🆘 [CommunityCard] Using first available community as fallback: "${communityData.name}"`);
+          }
+        }
+      }
+    }
+    
+    // 5. Final fallback - use a meaningful generic name (but NEVER the author name)
+    if (!communityData || !communityData.name || communityData.name === 'null' || communityData.name === 'undefined') {
       communityData = {
         id: post.community?.id || 'unknown',
-        name: 'Community', // Never show null
+        name: 'Community', // Generic but clear - never use author name
         logo: post.community?.logo || null,
         isPrivate: post.community?.isPrivate || false
       };
-      console.log('⚠️ [CommunityCard] Using fallback community name "Community" for post:', {
+      console.log('⚠️ [CommunityCard] Using final fallback community name "Community" for post:', {
         postId: post.id,
         enrichedName: enrichedPost.community?.name,
         originalName: post.community?.name,
         communityId: post.community?.id,
-        storeHasCommunities: communities.length > 0
+        storeHasCommunities: communities.length > 0,
+        postType: post.type,
+        authorName: post.author?.name
       });
     }
     
+    // Double check final result and ensure we never show author name as community name
+    if (communityData.name === post.author?.name) {
+      console.error(`🚨 [CommunityCard] CRITICAL: Community name matches author name! Fixing...`);
+      communityData.name = 'Community';
+    }
+    
+    console.log(`🏁 [CommunityCard] Final community info for post ${post.id}:`, {
+      name: communityData.name,
+      id: communityData.id,
+      hasLogo: !!communityData.logo,
+      isPrivate: communityData.isPrivate,
+      authorName: post.author?.name,
+      differentFromAuthor: communityData.name !== post.author?.name
+    });
+    
     return communityData;
-  }, [enrichedPost.community, post.community, communities, communityLoadTime, post.id]);
+  }, [enrichedPost.community, post.community, communities, communityLoadTime, post.id, post.type, post.author?.name]);
   
 
   return (
@@ -293,6 +352,13 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
             <Text style={styles.communityName}>
               r/{(() => {
                 const name = communityInfo?.name;
+                console.log('🏷️ [CommunityCard] Displaying community name for post:', {
+                  postId: post.id,
+                  displayName: name,
+                  communityInfoComplete: JSON.stringify(communityInfo),
+                  postType: post.type
+                });
+                
                 // Aggressive null/undefined/empty check
                 if (!name || 
                     name === 'null' || 

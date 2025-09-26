@@ -235,6 +235,8 @@ function mapApiPostToPost(apiPost: any) {
         // Method 3: If we have a valid community name but no ID, find by name
         if (!enrichedCommunity && mappedPost.community?.name && 
             mappedPost.community.name !== 'null' && 
+            mappedPost.community.name !== null && 
+            mappedPost.community.name !== undefined && 
             mappedPost.community.name.trim() !== '') {
           enrichedCommunity = communities.find((community: any) => 
             community.name === mappedPost.community!.name
@@ -253,24 +255,65 @@ function mapApiPostToPost(apiPost: any) {
             isPrivate: enrichedCommunity.isPrivate || false,
           };
           console.log(`🔄 [Post Mapper] Enriched post ${mappedPost.id} with community "${enrichedCommunity.name}"`);
-        } else if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
-          // Set fallback if still no valid name
-          console.log(`⚠️ [Post Mapper] No community data found for post ${mappedPost.id}, using fallback`);
-          if (!mappedPost.community) mappedPost.community = {};
-          mappedPost.community.name = 'Community';
+        } else if (!mappedPost.community?.name || mappedPost.community.name === 'null' || mappedPost.community.name === null || mappedPost.community.name === undefined) {
+          // More aggressive fallback: try to find ANY community that might contain this post
+          console.log(`⚠️ [Post Mapper] No community data found for post ${mappedPost.id}, trying alternative lookup...`);
+          
+          // Check if any community has this post in their posts array
+          const fallbackCommunity = communities.find((community: any) => {
+            if (!Array.isArray(community.posts)) return false;
+            return community.posts.some((communityPost: any) => {
+              // Check various ID formats
+              const postId = typeof communityPost === 'string' ? communityPost : 
+                           (communityPost?.id || communityPost?._id);
+              return postId === mappedPost.id;
+            });
+          });
+          
+          if (fallbackCommunity && fallbackCommunity.name) {
+            mappedPost.community = {
+              id: fallbackCommunity.id || fallbackCommunity._id,
+              name: fallbackCommunity.name,
+              logo: fallbackCommunity.logo || null,
+              isPrivate: fallbackCommunity.isPrivate || false,
+            };
+            console.log(`✅ [Post Mapper] Found community via post lookup: "${fallbackCommunity.name}" for post ${mappedPost.id}`);
+          } else {
+            // Final fallback: check if we have at least one community to avoid showing generic name
+            const firstValidCommunity = communities.find((c: any) => c.name && c.name !== 'null');
+            if (firstValidCommunity) {
+              console.log(`🔍 [Post Mapper] Using first available community "${firstValidCommunity.name}" as fallback for post ${mappedPost.id}`);
+              mappedPost.community = {
+                id: firstValidCommunity.id || firstValidCommunity._id,
+                name: firstValidCommunity.name,
+                logo: firstValidCommunity.logo || null,
+                isPrivate: firstValidCommunity.isPrivate || false,
+              };
+            } else {
+              // Only use generic "Community" as absolute last resort
+              console.log(`⚠️ [Post Mapper] No community data available, using generic fallback for post ${mappedPost.id}`);
+              if (!mappedPost.community) mappedPost.community = {};
+              mappedPost.community.name = 'Community';
+            }
+          }
         }
       } else {
         console.log(`⚠️ [Post Mapper] No communities loaded yet for post ${mappedPost.id}`);
-        // Ensure we never show null
-        if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
+        // When no communities are loaded yet, preserve any existing community name from API
+        // Only fallback to generic if we truly have no community information
+        if (!mappedPost.community?.name || mappedPost.community.name === 'null' || mappedPost.community.name === null || mappedPost.community.name === undefined || mappedPost.community.name.trim() === '') {
           if (!mappedPost.community) mappedPost.community = {};
-          mappedPost.community.name = 'Community';
+          // Use more descriptive fallback to distinguish from enriched posts
+          mappedPost.community.name = 'Unknown Community';
+          console.log(`📝 [Post Mapper] Set temporary fallback name for post ${mappedPost.id}`);
+        } else {
+          console.log(`💾 [Post Mapper] Preserving existing community name "${mappedPost.community.name}" for post ${mappedPost.id}`);
         }
       }
     } catch (error) {
       console.error('Error enriching community post:', error);
       // Ensure fallback
-      if (!mappedPost.community?.name || mappedPost.community.name === 'null') {
+      if (!mappedPost.community?.name || mappedPost.community.name === 'null' || mappedPost.community.name === null || mappedPost.community.name === undefined) {
         if (!mappedPost.community) mappedPost.community = {};
         mappedPost.community.name = 'Community';
       }

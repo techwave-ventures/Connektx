@@ -230,17 +230,23 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
     originalPost: apiPost.originalPost || null,
     // Community info (will be enriched later if missing)
     community: isCommunityPost ? (() => {
-      const hasValidName = apiPost.communityName && apiPost.communityName !== 'null' && apiPost.communityName.trim() !== '';
+      const hasValidName = apiPost.communityName && 
+                          apiPost.communityName !== 'null' && 
+                          apiPost.communityName !== null && 
+                          apiPost.communityName.toString().trim() !== '' &&
+                          apiPost.communityName !== 'undefined';
       if (!hasValidName) {
-        console.log(`⚠️ [API Mapper] Using fallback community name for post ${postId}:`, {
+        console.log(`⚠️ [API Mapper] No valid community name found for post ${postId}:`, {
           communityName: apiPost.communityName,
           communityId: apiPost.communityId,
-          type: typeof apiPost.communityName
+          type: typeof apiPost.communityName,
+          willBeEnriched: true
         });
       }
       return {
         id: apiPost.communityId || 'unknown',
-        name: hasValidName ? apiPost.communityName : 'Community',
+        // Don't set null - use undefined so post store enrichment can detect missing name
+        name: hasValidName ? apiPost.communityName : undefined,
         logo: apiPost.communityLogo || null,
         isPrivate: apiPost.isPrivate || false,
       };

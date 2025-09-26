@@ -93,9 +93,9 @@ const HomeScreen = memo(() => {
           console.log('🏘️ Initializing communities...');
           await initializeCommunities(token);
           
-          // Step 3: Fetch posts, stories in parallel (communities now loaded)
+          // Step 3: Fetch posts with community enrichment and stories in parallel (communities now loaded)
           await Promise.all([
-            refreshPosts(activeTab as 'latest' | 'trending'),
+            refreshPostsWithCommunities(activeTab as 'latest' | 'trending'),
             fetchStories(),
             fetchFollowingStories()
           ]);
@@ -116,10 +116,14 @@ const HomeScreen = memo(() => {
   // Force re-render when communities are loaded to update any fallback community names
   useEffect(() => {
     if (communities.length > 0) {
-      console.log('🏘️ Communities loaded, triggering post re-render to update community names');
+      console.log('🏘️ Communities loaded, refreshing posts with community enrichment');
+      // Call refreshPostsWithCommunities to update posts with real community names
+      refreshPostsWithCommunities(activeTab as 'latest' | 'trending').catch((error) => {
+        console.warn('Failed to refresh posts with communities:', error);
+      });
       setCommunityRefreshTrigger(Date.now());
     }
-  }, [communities.length]);
+  }, [communities.length, activeTab, refreshPostsWithCommunities]);
 
   // Refresh posts when screen comes into focus (disabled to prevent auto-refresh after post creation)
   // Posts are automatically added to the feed when created via post store
@@ -228,7 +232,7 @@ const HomeScreen = memo(() => {
           updateUser(mappedUser);
           
           await Promise.all([
-            refreshPosts(activeTab as 'latest' | 'trending'),
+            refreshPostsWithCommunities(activeTab as 'latest' | 'trending'),
             fetchStories(),
             fetchFollowingStories(),
           ]);
@@ -245,8 +249,8 @@ const HomeScreen = memo(() => {
 
   const handleTabChange = useCallback(async (tabId: string) => {
     setActiveTab(tabId);
-    await refreshPosts(tabId as 'latest' | 'trending');
-  }, []);
+    await refreshPostsWithCommunities(tabId as 'latest' | 'trending');
+  }, [refreshPostsWithCommunities]);
 
   const handleStoryPress = useCallback((storyId: string, userStories: Story[], storyIndex: number) => {
     if (userStories && userStories.length > 0) {
@@ -351,6 +355,27 @@ const HomeScreen = memo(() => {
     // Enrich community posts with complete community data before rendering
     const enrichedPost = item.type === 'community' ? enrichCommunityPosts([item])[0] : item;
     
+    // AGGRESSIVE TYPE DETECTION: If post has community data, it should be a community post
+    const shouldUseCommunityCard = enrichedPost.type === 'community' || 
+                                  (enrichedPost.community && (enrichedPost.community.id || enrichedPost.community.name));
+    
+    // Override type if we detect community data but type is wrong
+    if (shouldUseCommunityCard && enrichedPost.type !== 'community') {
+      enrichedPost.type = 'community';
+      console.log(`🔄 [HomeScreen] Corrected post type to 'community' for post ${item.id}`);
+    }
+    
+    // Debug logging for component selection
+    console.log(`🔄 [HomeScreen] Rendering post ${item.id}:`, {
+      originalType: item.type,
+      enrichedType: enrichedPost.type,
+      shouldUseCommunityCard,
+      hasCommunityData: !!(enrichedPost.community && (enrichedPost.community.id || enrichedPost.community.name)),
+      communityId: enrichedPost.community?.id,
+      communityName: enrichedPost.community?.name,
+      authorName: enrichedPost.author?.name
+    });
+    
     return (
       <ErrorBoundary
         fallback={
@@ -360,7 +385,7 @@ const HomeScreen = memo(() => {
           />
         }
       >
-        {enrichedPost.type === 'community' ? (
+        {shouldUseCommunityCard ? (
           <CommunityCard post={enrichedPost} key={`community-${item.id || item._id}-${communityRefreshTrigger}`} />
         ) : (
           <PostCard post={enrichedPost} />
