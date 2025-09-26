@@ -335,19 +335,15 @@ export const deleteCommunity = async (token: string, communityId: string) => {
 
 export const joinCommunity = async (token: string, communityId: string, message?: string) => {
   try {
-    // Create FormData instead of JSON payload
-    const formData = new FormData();
-    if (message?.trim()) {
-      formData.append('message', message.trim());
-    }
+    const requestBody = message?.trim() ? { message: message.trim() } : {};
     
     const response = await fetch(`${API_BASE_URL}/community/${communityId}/join`, {
       method: 'POST',
       headers: {
         'token': token,
-        // Remove 'Content-Type' header to let the browser set it automatically for FormData
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify(requestBody),
     });
     
     const responseText = await response.text();
@@ -356,22 +352,48 @@ export const joinCommunity = async (token: string, communityId: string, message?
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+      throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
     }
     
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to join community');
+      let errorMessage = data.message || 'Failed to join community';
+      
+      // Handle specific backend errors more gracefully
+      if (response.status === 401) {
+        if (errorMessage.includes('Tokine') || errorMessage.includes('Token')) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else {
+          errorMessage = 'Unauthorized: ' + errorMessage;
+        }
+      } else if (response.status === 500) {
+        if (errorMessage.includes('Cannot read properties of undefined')) {
+          errorMessage = 'Server configuration error. Please contact support or try again later.';
+        } else {
+          errorMessage = 'Server error: ' + errorMessage;
+        }
+      } else if (response.status === 400) {
+        errorMessage = 'Invalid request: ' + errorMessage;
+      } else if (response.status === 404) {
+        errorMessage = 'Community not found or has been deleted.';
+      }
+      
+      throw new Error(errorMessage);
     }
     
     return data;
     
   } catch (error: any) {
-    // Check if this is a network error
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    // Check if this is actually a network/connection error
+    if (error instanceof TypeError && 
+        (error.message.includes('fetch') || 
+         error.message.includes('Failed to fetch') ||
+         error.message.includes('Network request failed') ||
+         error.message.includes('ERR_NETWORK') ||
+         error.message.includes('ERR_INTERNET_DISCONNECTED'))) {
       throw new Error('Network error: Unable to connect to server. Please check your internet connection.');
     }
     
-    // Re-throw the original error
+    // If it's already a proper error message from the API handling above, re-throw as-is
     throw error;
   }
 };
