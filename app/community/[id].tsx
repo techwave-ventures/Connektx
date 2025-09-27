@@ -879,7 +879,14 @@ export default function CommunityDetailScreen() {
         }} 
       />
       
-      <View style={styles.contentContainer}>
+      <ScrollView
+        style={styles.mainScroll}
+        contentContainerStyle={styles.mainScrollContent}
+        stickyHeaderIndices={[1]}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+      >
         {/* Community Header */}
         <View style={styles.communityHeader}>
           <View style={styles.communityBanner}>
@@ -1061,7 +1068,7 @@ export default function CommunityDetailScreen() {
 
         {/* Content */}
         {activeTab === 'feed' && (
-          <ScrollView style={styles.tabContentScrollView}>
+          <View style={styles.tabContent}>
           <View style={styles.feedContainer}>
             {/* Community Highlights */}
             {community.announcements.length > 0 && (
@@ -1230,11 +1237,11 @@ export default function CommunityDetailScreen() {
               )}
             </View>
           </View>
-          </ScrollView>
+          </View>
         )}
 
         {activeTab === 'questions' && (
-          <ScrollView style={styles.tabContentScrollView}>
+          <View style={styles.tabContent}>
           <View style={styles.questionsContainer}>
             {/* Questions Header */}
             <View style={styles.qaHeader}>
@@ -1388,7 +1395,7 @@ export default function CommunityDetailScreen() {
               )}
             </View>
           </View>
-          </ScrollView>
+          </View>
         )}
         
         {/* Events Tab Content */}
@@ -1552,7 +1559,7 @@ export default function CommunityDetailScreen() {
         )} */}
 
         {activeTab === 'about' && (
-          <ScrollView style={styles.tabContentScrollView}>
+          <View style={styles.tabContent}>
           <View style={styles.aboutContainer}>
             <View style={styles.aboutSection}>
               <Text style={styles.aboutTitle}>About Community</Text>
@@ -1585,9 +1592,9 @@ export default function CommunityDetailScreen() {
               </View>
             </View>
           </View>
-          </ScrollView>
+          </View>
         )}
-      </View>
+      </ScrollView>
       
       {/* Create Post Modal */}
       <Modal
@@ -1992,6 +1999,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.background,
   },
   contentContainer: {
+    flex: 1,
+  },
+  mainScroll: {
+    flex: 1,
+  },
+  mainScrollContent: {
+    paddingBottom: 100, // space for FAB and bottom padding
+  },
+  tabContent: {
     flex: 1,
   },
   backButton: {
