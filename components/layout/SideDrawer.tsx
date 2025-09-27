@@ -71,11 +71,13 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.drawer}>
+          {/*
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={24} color={Colors.dark.text} />
             </TouchableOpacity>
           </View>
+          */}
 
           <ScrollView style={styles.content}>
             {/* User Profile Section */}
@@ -84,6 +86,9 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 style={styles.profileSection}
                 onPress={() => handleNavigation('/profile')}
               >
+                <TouchableOpacity onPress={onClose} style={[styles.closeButton, styles.profileCloseButton]}>
+                  <X size={24} color={Colors.dark.text} />
+                </TouchableOpacity>
                 <View style={styles.avatarContainer}>
                   <Image 
                     source={ {uri : user.avatar} } 
@@ -113,7 +118,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
 
             <View style={styles.divider} />
 
-            {/* Navigation Items */}
+            {/* Navigation Items - MAIN hidden
             <View style={styles.navSection}>
               <Text style={styles.sectionTitle}>MAIN</Text>
               
@@ -165,8 +170,9 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <Text style={styles.navItemText}>Communities</Text>
               </TouchableOpacity>
             </View>
+            */}
 
-            <View style={styles.divider} />
+            {/* <View style={styles.divider} /> */}
 
             <View style={styles.navSection}>
               <Text style={styles.sectionTitle}>PERSONAL</Text>
@@ -203,6 +209,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <Text style={styles.navItemText}>Saved</Text>
               </TouchableOpacity>
               
+              {/* Analytics hidden
               <TouchableOpacity 
                 style={styles.navItem}
                 onPress={() => handleNavigation('/analytics')}
@@ -210,7 +217,9 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <BarChart size={20} color={Colors.dark.text} />
                 <Text style={styles.navItemText}>Analytics</Text>
               </TouchableOpacity>
+              */}
               
+              {/* Community Dashboard hidden
               {isAdmin && (
                 <TouchableOpacity 
                   style={styles.navItem}
@@ -220,10 +229,12 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                   <Text style={[styles.navItemText, { color: Colors.dark.tint }]}>Community Dashboard</Text>
                 </TouchableOpacity>
               )}
+              */}
             </View>
 
-            <View style={styles.divider} />
+            {/* <View style={styles.divider} /> */}
 
+            {/* OTHER hidden
             <View style={styles.navSection}>
               <Text style={styles.sectionTitle}>OTHER</Text>
               
@@ -243,6 +254,7 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 <Text style={styles.navItemText}>Settings</Text>
               </TouchableOpacity>
             </View>
+            */}
 
             <View style={styles.divider} />
 
@@ -294,6 +306,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.card,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  profileCloseButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10,
   },
   content: {
     flex: 1,
