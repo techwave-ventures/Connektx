@@ -10,6 +10,7 @@ import {
   Modal,
   Alert,
   Platform,
+  Linking,
   StatusBar
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -85,7 +86,22 @@ export default function JobDetailScreen() {
     
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
+    if (job && (job as any).applicationLink) {
+      try {
+        const url = (job as any).applicationLink as string;
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          Alert.alert('Cannot open link', `Please copy and paste this URL into your browser: ${url}`);
+        }
+      } catch (e) {
+        Alert.alert('Error', 'Unable to open the application link.');
+      }
+      return;
+    }
+    // Fallback to in-app application modal if no link is provided
     setApplyModalVisible(true);
   };
 
