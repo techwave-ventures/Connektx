@@ -26,6 +26,7 @@ import {
   Shield,
 } from 'lucide-react-native';
 import Avatar from '@/components/ui/Avatar';
+import Badge from '@/components/ui/Badge';
 import ThreadsImageGallery from '@/components/ui/ThreadsImageGallery';
 import FullScreenImageViewer from '@/components/ui/FullScreenImageViewer';
 import { Post } from '@/types';
@@ -175,6 +176,21 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     }
     return post;
   }, [post, communities]);
+
+  // Detect if this post is a question (for Q&A badge)
+  const isQuestion = useMemo(() => {
+    // Prefer explicit type or subtype when available
+    if ((post as any)?.type === 'question' || (post as any)?.subtype === 'question') {
+      return true;
+    }
+    // Heuristic detection similar to community page mapping
+    const content = (post?.content || '').toString();
+    const lc = content.toLowerCase();
+    const startsWithQuestionWord = ['how ', 'what ', 'why ', 'when ', 'where ', 'who '].some(w => lc.startsWith(w));
+    const mentionsQuestion = lc.includes('question');
+    const hasQuestionMark = content.includes('?');
+    return hasQuestionMark || startsWithQuestionWord || mentionsQuestion;
+  }, [post?.content, (post as any)?.type, (post as any)?.subtype]);
 
   // State to force re-render when communities load
   const [communityLoadTime, setCommunityLoadTime] = useState(0);
@@ -382,6 +398,14 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
                 <Lock size={14} color={Colors.dark.warning} />
               ) : (
                 <Globe size={14} color={Colors.dark.success} />
+              )}
+              {isQuestion && (
+                <Badge 
+                  label="Q&A" 
+                  variant="secondary" 
+                  size="small" 
+                  style={styles.qaBadge}
+                />
               )}
             </View>
             <Text style={styles.communityTimestamp}>{formattedDate}</Text>
@@ -601,6 +625,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 18,
     marginRight: 8,
+  },
+  qaBadge: {
+    marginLeft: 4,
+    marginRight: 4,
   },
   communityTimestamp: {
     color: Colors.dark.subtext,
