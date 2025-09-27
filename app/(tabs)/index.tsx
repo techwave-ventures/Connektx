@@ -328,16 +328,19 @@ const HomeScreen = memo(() => {
 
   const renderHeader = () => (
     <>
-      {dataLoading ? (
-        <StoriesSectionSkeleton />
-      ) : (
-        <StoriesSection
-          stories={safeStories}
-          userStories={userStories}
-          fetchedStories={fetchedStories}
-          onStoryPress={handleStoryPress}
-          onAddStory={handleAddStory}
-        />
+      {/* Stories section hidden from UI but logic retained */}
+      {false && (
+        dataLoading ? (
+          <StoriesSectionSkeleton />
+        ) : (
+          <StoriesSection
+            stories={safeStories}
+            userStories={userStories}
+            fetchedStories={fetchedStories}
+            onStoryPress={handleStoryPress}
+            onAddStory={handleAddStory}
+          />
+        )
       )}
       <TabBar
         tabs={[
@@ -491,16 +494,18 @@ const HomeScreen = memo(() => {
         </TouchableOpacity>
       </View>
 
-      {/* Story Viewer */}
-      <StoryViewer
-        visible={showStoryViewer}
-        stories={currentStories}
-        initialStoryIndex={currentStoryIndex}
-        onClose={handleStoryViewerClose}
-        onStoryComplete={handleStoryComplete}
-        onLikeStory={handleLikeStory}
-        onReplyToStory={handleReplyToStory}
-      />
+      {/* Story Viewer hidden from UI but logic retained */}
+      {false && (
+        <StoryViewer
+          visible={showStoryViewer}
+          stories={currentStories}
+          initialStoryIndex={currentStoryIndex}
+          onClose={handleStoryViewerClose}
+          onStoryComplete={handleStoryComplete}
+          onLikeStory={handleLikeStory}
+          onReplyToStory={handleReplyToStory}
+        />
+      )}
     </View>
   );
 });
