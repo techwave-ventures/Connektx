@@ -71,11 +71,6 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
     >
       <View style={styles.overlay}>
         <View style={styles.drawer}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color={Colors.dark.text} />
-            </TouchableOpacity>
-          </View>
 
           <ScrollView style={styles.content}>
             {/* User Profile Section */}
@@ -84,6 +79,9 @@ const SideDrawer: React.FC<SideDrawerProps> = ({ isOpen, onClose }) => {
                 style={styles.profileSection}
                 onPress={() => handleNavigation('/profile')}
               >
+                <TouchableOpacity onPress={onClose} style={styles.sectionCloseButton}>
+                  <X size={20} color={Colors.dark.text} />
+                </TouchableOpacity>
                 <View style={styles.avatarContainer}>
                   <Image 
                     source={ {uri : user.avatar} } 
@@ -301,6 +299,7 @@ const styles = StyleSheet.create({
   profileSection: {
     padding: 16,
     backgroundColor: Colors.dark.background,
+    position: 'relative',
   },
   avatarContainer: {
     position: 'relative',
@@ -324,6 +323,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  sectionCloseButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
   },
   profileInfo: {
     alignItems: 'center',
