@@ -173,8 +173,8 @@ function mapCommunityToHomePost(rawPost: any, community: Community, currentUserI
   console.log('  → Mapped to type:', finalType, 'for post:', rawPost?.id);
   console.log('  🖼️ Final mapped images:', {
     originalImages: rawPost?.images,
-    mappedImages: mappedPost.images,
-    imagesLength: mappedPost.images.length
+    mappedImages: mappedPost.images ?? [],
+    imagesLength: (mappedPost.images ?? []).length
   });
   
   return mappedPost;
@@ -751,7 +751,7 @@ export default function CommunityDetailScreen() {
               id: question.id,
               content: question.content,
               author: {
-                id: question.userId || question.UserId,
+                id: question.userId || (question as any).UserId,
                 name: question.authorName,
                 avatar: question.authorAvatar
               },
@@ -787,18 +787,12 @@ export default function CommunityDetailScreen() {
       // Backend expects 'discription' field (misspelled), not 'content'
       const questionData = {
         discription: questionContent.trim(), // Backend expects 'discription' (misspelled)
-        type: 'question'
+        type: 'question' as const
       };
       
       console.log('  📤 Final question data being sent to backend:', JSON.stringify(questionData, null, 2));
       
-      const createResult = await createPost(token, community.id, questionData);
-      console.log('  ✅ Backend response for question creation:', createResult);
-      
-      // Check what type the backend actually saved
-      if (createResult && createResult.post) {
-        console.log('  🏷️ Newly created post type from backend:', createResult.post.type);
-      }
+      await createPost(token, community.id, questionData);
       
       console.log('  ✅ Question created successfully!');
       
@@ -929,15 +923,16 @@ export default function CommunityDetailScreen() {
               <TouchableOpacity 
                 style={styles.chatRoomButton}
                 onPress={() => {
-                  if (community.groupChatId) {
+                  const groupChatId = (community as any).groupChatId;
+                  if (groupChatId) {
                     router.push({
-                      pathname: `/messages/${community.groupChatId}`,
+                      pathname: `/messages/${groupChatId}`,
                       params: { 
                         otherUserName: community.name, 
                         otherUserAvatar: community.logo,
-                        isGroupChat: 'true' // Pass a flag to identify it as a group chat
+                        isGroupChat: 'true'
                       },
-                    });
+                    } as any);
                   } else {
                     Alert.alert("Chat Not Available", "This community does not have a group chat enabled.");
                   }
@@ -1094,13 +1089,13 @@ export default function CommunityDetailScreen() {
               {getSortedPosts().length > 0 ? (
                 getSortedPosts().map(post => {
                   // Check if this is an answer post
-                  if (post.isAnswerPost) {
+                  if ((post as any).isAnswerPost) {
                     return (
                       <TouchableOpacity 
                         key={post.id} 
                         style={styles.answerPostCard}
                         onPress={() => {
-                          router.push(`/qa/${post.question.id}`);
+                          router.push(`/qa/${(post as any).question?.id}` as any);
                         }}
                       >
                         {/* Answer Author Header */}
@@ -1120,7 +1115,7 @@ export default function CommunityDetailScreen() {
                         <TouchableOpacity 
                           style={styles.answerPostMenuButton}
                           onPress={() => {
-                          if (canModerateContent() || (post.userId || post.UserId) === user?.id) {
+                          if (canModerateContent() || (((post as any).userId || (post as any).UserId) === user?.id)) {
                               setModerationMenuVisible(moderationMenuVisible === post.id ? null : post.id);
                               setSelectedPostId(post.id);
                             }
@@ -1130,12 +1125,12 @@ export default function CommunityDetailScreen() {
                         </TouchableOpacity>
                         
                         {/* Answer Moderation Menu */}
-                        {moderationMenuVisible === post.id && (canModerateContent() || (post.userId || post.UserId) === user?.id) && (
+                        {moderationMenuVisible === post.id && (canModerateContent() || (((post as any).userId || (post as any).UserId) === user?.id)) && (
                           <View style={styles.moderationMenu}>
                             {canModerateContent() && (
                               <TouchableOpacity
                                 style={styles.moderationMenuItem}
-                                onPress={() => handleModerationAction('delete', post.question.id, post.id)}
+                                onPress={() => handleModerationAction('delete', (post as any).question?.id as any, post.id)}
                               >
                                 <Trash2 size={16} color={Colors.dark.error} />
                                 <Text style={[styles.moderationMenuText, { color: Colors.dark.error }]}>
@@ -1144,7 +1139,7 @@ export default function CommunityDetailScreen() {
                               </TouchableOpacity>
                             )}
                             
-                            {(post.userId || post.UserId) === user?.id && (
+                            {(((post as any).userId || (post as any).UserId) === user?.id) && (
                               <TouchableOpacity
                                 style={styles.moderationMenuItem}
                                 onPress={() => {
@@ -1164,13 +1159,13 @@ export default function CommunityDetailScreen() {
                         <View style={styles.questionContextSection}>
                           <View style={styles.questionContextHeader}>
                             <Avatar 
-                              source={post.question.author?.avatar} 
-                              name={post.question.author?.name || 'User'} 
+                              source={(post as any).question?.author?.avatar} 
+                              name={(post as any).question?.author?.name || 'User'} 
                               size={24} 
                             />
-                            <Text style={styles.questionContextAuthor}>u/{post.question.author?.name || 'User'} asked:</Text>
+                            <Text style={styles.questionContextAuthor}>u/{(post as any).question?.author?.name || 'User'} asked:</Text>
                           </View>
-                          <Text style={styles.questionContextContent}>{post.question.content}</Text>
+                          <Text style={styles.questionContextContent}>{(post as any).question?.content}</Text>
                         </View>
                         
                         {/* Answer Content */}
@@ -1201,7 +1196,7 @@ export default function CommunityDetailScreen() {
                           <TouchableOpacity 
                             style={styles.viewQuestionButton}
                             onPress={() => {
-                              router.push(`/qa/${post.question.id}`);
+                              router.push(`/qa/${(post as any).question?.id}` as any);
                             }}
                           >
                             <ExternalLink size={16} color={Colors.dark.primary} />
@@ -1291,7 +1286,7 @@ export default function CommunityDetailScreen() {
                         style={styles.questionPostMenuButton}
                         onPress={(e) => {
                           e.stopPropagation(); // Prevent parent TouchableOpacity from firing
-                          if (canModerateContent() || question.UserId === user?.id) {
+                          if (canModerateContent() || (((question as any).UserId || question.userId) === user?.id)) {
                             setModerationMenuVisible(moderationMenuVisible === question.id ? null : question.id);
                             setSelectedPostId(question.id);
                           }
@@ -1301,7 +1296,7 @@ export default function CommunityDetailScreen() {
                       </TouchableOpacity>
                       
                       {/* Question Moderation Menu */}
-                      {moderationMenuVisible === question.id && (canModerateContent() || question.UserId === user?.id) && (
+                      {moderationMenuVisible === question.id && (canModerateContent() || (((question as any).UserId || question.userId) === user?.id)) && (
                         <View style={styles.moderationMenu}>
                           {canModerateContent() && (
                             <TouchableOpacity
@@ -1325,7 +1320,7 @@ export default function CommunityDetailScreen() {
                             </TouchableOpacity>
                           )}
                           
-                          {question.UserId === user?.id && (
+                          {(((question as any).UserId || question.userId) === user?.id) && (
                             <TouchableOpacity
                               style={styles.moderationMenuItem}
                               onPress={() => {
@@ -1352,7 +1347,7 @@ export default function CommunityDetailScreen() {
                         style={styles.questionStatItem}
                         onPress={(e) => { 
                           e.stopPropagation(); // Prevent parent TouchableOpacity from firing
-                          if (token) likePost(token, community.id, question.id); 
+                          if (token) likePost(token, question.id); 
                         }}
                         activeOpacity={0.7}
                       >
@@ -1923,7 +1918,7 @@ export default function CommunityDetailScreen() {
                 <View style={styles.qaListItemFooter}>
                   <TouchableOpacity 
                     style={styles.qaListItemStat}
-                    onPress={() => { if (token) likePost(token, community.id, question.id); }}
+                    onPress={() => { if (token) likePost(token, question.id); }}
                     activeOpacity={0.7}
                   >
                     <Heart 
@@ -2114,9 +2109,7 @@ const styles = StyleSheet.create({
   createPostButton: {
     flex: 1,
   },
-  joinButton: {
-    minWidth: 80,
-  },
+  /* joinButton deprecated - merged into new button styles */
   navigationContainer: {
     backgroundColor: Colors.dark.background,
     borderBottomWidth: 1,
@@ -3232,6 +3225,7 @@ const styles = StyleSheet.create({
   joinButton: {
     backgroundColor: Colors.dark.primary,
     borderColor: Colors.dark.primary,
+    minWidth: 80,
   },
   joinButtonText: {
     fontSize: 14,
