@@ -151,10 +151,8 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
 
   const handleEditPost = () => {
     setMenuVisible(false);
-    router.push({
-      pathname: '/post/edit',
-      params: { id: post.id }
-    });
+    // Navigate directly to the dynamic edit route to avoid matching /post/[id] with id="edit"
+    router.push(`/post/edit/${post.id}` as any);
   };
 
   const handleDeletePost = () => {
