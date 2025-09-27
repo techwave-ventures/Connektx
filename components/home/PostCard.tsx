@@ -161,7 +161,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   const handleViewProfile = () => {
     // Pass user data to avoid loading screen
     router.push({
-      pathname: `/profile/${post.author.id}`,
+      pathname: `/profile/${post.author.id}` as any,
       params: { userData: JSON.stringify({ id: post.author.id, name: post.author.name, avatar: post.author.avatar, bio: post.author.bio || post.author.headline }) }
     });
   };
@@ -268,7 +268,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
                         post.community.name !== null && 
                         post.community.name !== undefined && 
                         post.community.name.trim() !== '') {
-                      return `r/${post.community.name}`;
+                      return post.community.name;
                     }
                   }
                   
@@ -299,42 +299,24 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
         <TouchableOpacity 
           style={styles.communityContainer}
           onPress={() => {
-            if (variant === 'communityDetail') {
-              // Community detail page: context shows community -> go to community
-              router.push(`/community/${post.community?.id}`);
-            } else {
-              // Home page: context shows user -> go to user profile
-              handleViewProfile();
-            }
+            // Home page (not communityDetail): context shows user -> go to user profile
+            handleViewProfile();
           }}
           activeOpacity={0.8}
         >
           <View style={styles.communityInfo}>
             <View style={styles.communityIconContainer}>
-              {variant === 'communityDetail' ? (
-                // Community detail page: Show community logo in context
-                post.community.logo ? (
-                  <Avatar source={post.community.logo} size={20} />
-                ) : (
-                  <View style={[styles.communityIconFallback, { backgroundColor: post.community.isPrivate ? Colors.dark.warning : Colors.dark.tint }]}>
-                    <Users size={10} color={Colors.dark.background} />
-                  </View>
-                )
+              {/* Home page: Show user avatar in context */}
+              {post?.author.avatar ? (
+                <Avatar source={post.author.avatar} size={20} />
               ) : (
-                // Home page: Show user avatar in context
-                post?.author.avatar ? (
-                  <Avatar source={post.author.avatar} size={20} />
-                ) : (
-                  <View style={[styles.communityIconFallback, { backgroundColor: Colors.dark.tint }]}>
-                    <Users size={10} color={Colors.dark.background} />
-                  </View>
-                )
+                <View style={[styles.communityIconFallback, { backgroundColor: Colors.dark.tint }]}>
+                  <Users size={10} color={Colors.dark.background} />
+                </View>
               )}
             </View>
             <Text style={styles.communityName}>
-              {variant === 'communityDetail' ? 
-                (post.community.name && post.community.name !== 'null' && post.community.name.trim() !== '' ? 
-                  `r/${post.community.name}` : 'r/Unknown') : post?.author.name}
+              {post?.author.name}
             </Text>
             <View style={styles.communityPrivacyIndicator}>
               {post.community.isPrivate ? (
@@ -439,11 +421,12 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
           onPress={() => {
             // Pass original post data to avoid loading screen
             console.log('✅ [PostCard] Navigating to original post with data');
+            const original = post.originalPost!;
             router.push({
-              pathname: `/post/${post.originalPost.id}` as any,
+              pathname: `/post/${original.id}` as any,
               params: {
                 postData: JSON.stringify({
-                  ...post.originalPost,
+                  ...original,
                   _fromPostCard: true,
                   _fromRepost: true // Additional metadata for reposts
                 })

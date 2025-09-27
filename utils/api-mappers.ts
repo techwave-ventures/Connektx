@@ -204,7 +204,13 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
                           apiPost.communityId || 
                           (apiPost.community && apiPost.community.id);
 
-  console.log('🗺️ [API Mapper] Starting post mapping for:', postId);
+  console.log('🗺️ [API Mapper] Starting post mapping for:', postId, {
+    hasSubtype: !!apiPost.subtype,
+    subtype: apiPost.subtype,
+    hasType: !!apiPost.type,
+    type: apiPost.type,
+    willMapToQuestion: apiPost.subtype === 'question'
+  });
 
   // Get author information using the robust author mapper
   const author = safeGetAuthor(apiPost);
@@ -218,7 +224,18 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
     author: author,
     communityId: apiPost.communityId || null,
     createdAt: apiPost.createdAt || new Date().toISOString(),
-    type: apiPost.type || 'Community',
+    // Map type, checking subtype for question posts
+    type: (() => {
+      const mappedType = apiPost.subtype === 'question' ? 'question' : 
+                        apiPost.type === 'poll' ? 'poll' : 
+                        (apiPost.type || 'community').toLowerCase();
+      console.log('➡️ [API Mapper] Type mapping result for', postId, ':', {
+        originalSubtype: apiPost.subtype,
+        originalType: apiPost.type,
+        mappedType: mappedType
+      });
+      return mappedType;
+    })(),
     images: safeGetImages(apiPost),
     likes: safeGetLikesCount(apiPost),
     comments: safeGetCommentsCount(apiPost),

@@ -184,6 +184,17 @@ export default function EditPostScreen() {
         options={{
           headerShown: true,
           headerTitle: 'Edit Post',
+          headerTitleStyle: {
+            color: Colors.dark.text,
+            fontSize: 18,
+            fontWeight: '600',
+          },
+          headerStyle: {
+            backgroundColor: Colors.dark.background,
+          } as any,
+          headerShadowVisible: false,
+          headerTintColor: Colors.dark.text,
+          headerBackVisible: false,
           headerLeft: () => (
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
               <ArrowLeft size={24} color={Colors.dark.text} />

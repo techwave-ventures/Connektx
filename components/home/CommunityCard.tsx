@@ -26,6 +26,7 @@ import {
   Shield,
 } from 'lucide-react-native';
 import Avatar from '@/components/ui/Avatar';
+import Badge from '@/components/ui/Badge';
 import ThreadsImageGallery from '@/components/ui/ThreadsImageGallery';
 import FullScreenImageViewer from '@/components/ui/FullScreenImageViewer';
 import { Post } from '@/types';
@@ -78,12 +79,12 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       pathname: `/post/${post.id}` as any,
       params: {
         postData: JSON.stringify({
-          ...post,
+          ...enrichedPost,
           _fromCommunityCard: true // Add metadata to indicate source
         })
       }
     });
-  }, [router, post]);
+  }, [router, enrichedPost]);
   
   const handleShare = useCallback(() => {
     setContentToShare({ id: post.id, type: 'post' });
@@ -134,13 +135,13 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
         pathname: `/post/${post.id}` as any,
         params: {
           postData: JSON.stringify({
-            ...post,
+            ...enrichedPost,
             _fromCommunityCard: true // Add metadata to indicate source
           })
         }
       });
     }
-  }, [onPress, router, post]);
+  }, [onPress, router, enrichedPost]);
   const handleImagePress = (imageUri: string, index: number) => {
     setSelectedImageIndex(index);
     setFullScreenVisible(true);
@@ -150,10 +151,8 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
 
   const handleEditPost = () => {
     setMenuVisible(false);
-    router.push({
-      pathname: '/post/edit',
-      params: { id: post.id }
-    });
+    // Navigate directly to the dynamic edit route to avoid matching /post/[id] with id="edit"
+    router.push(`/post/edit/${post.id}` as any);
   };
 
   const handleDeletePost = () => {
@@ -175,6 +174,21 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     }
     return post;
   }, [post, communities]);
+
+  // Detect if this post is a question (for Q&A badge)
+  const isQuestion = useMemo(() => {
+    // Prefer explicit type or subtype when available
+    if ((post as any)?.type === 'question' || (post as any)?.subtype === 'question') {
+      return true;
+    }
+    // Heuristic detection similar to community page mapping
+    const content = (post?.content || '').toString();
+    const lc = content.toLowerCase();
+    const startsWithQuestionWord = ['how ', 'what ', 'why ', 'when ', 'where ', 'who '].some(w => lc.startsWith(w));
+    const mentionsQuestion = lc.includes('question');
+    const hasQuestionMark = content.includes('?');
+    return hasQuestionMark || startsWithQuestionWord || mentionsQuestion;
+  }, [post?.content, (post as any)?.type, (post as any)?.subtype]);
 
   // State to force re-render when communities load
   const [communityLoadTime, setCommunityLoadTime] = useState(0);
@@ -350,7 +364,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           <View style={styles.communityInfo}>
             <View style={styles.communityNameRow}>
             <Text style={styles.communityName}>
-              r/{(() => {
+              {(() => {
                 const name = communityInfo?.name;
                 console.log('🏷️ [CommunityCard] Displaying community name for post:', {
                   postId: post.id,
@@ -382,6 +396,14 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
                 <Lock size={14} color={Colors.dark.warning} />
               ) : (
                 <Globe size={14} color={Colors.dark.success} />
+              )}
+              {isQuestion && (
+                <Badge 
+                  label="Q&A" 
+                  variant="secondary" 
+                  size="small" 
+                  style={styles.qaBadge}
+                />
               )}
             </View>
             <Text style={styles.communityTimestamp}>{formattedDate}</Text>
@@ -601,6 +623,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 18,
     marginRight: 8,
+  },
+  qaBadge: {
+    marginLeft: 4,
+    marginRight: 4,
   },
   communityTimestamp: {
     color: Colors.dark.subtext,

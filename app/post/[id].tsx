@@ -221,7 +221,11 @@ export default function PostDetailScreen() {
         content: passedPostData.content?.substring(0, 30) + '...',
         hasAuthor: !!passedPostData.author,
         authorName: passedPostData.author?.name,
-        source: navigationSource
+        source: navigationSource,
+        type: passedPostData.type,
+        subtype: passedPostData.subtype,
+        isQuestion: passedPostData.type === 'question',
+        allKeys: Object.keys(passedPostData)
       });
       
       setPost(passedPostData);
@@ -232,6 +236,17 @@ export default function PostDetailScreen() {
       fetchPostById(id).then(freshPost => {
         if (freshPost && freshPost.id === id) {
           console.log('🔄 [PostDetail] Updated with fresh data from API (background)');
+          
+          // Preserve the original post type if the passed data had it as 'question'
+          // This handles cases where the single post API doesn't return the subtype field
+          if (passedPostData.type === 'question' && freshPost.type !== 'question') {
+            console.log('📝 [PostDetail] Preserving question type from passed data');
+            freshPost = {
+              ...freshPost,
+              type: 'question'
+            };
+          }
+          
           setPost(freshPost);
         }
       }).catch(error => {
@@ -334,6 +349,19 @@ export default function PostDetailScreen() {
     setFullScreenVisible(false);
   };
 
+  // Determine if this post is a question to adjust UI copy (Answers vs Comments)
+  const isQuestion = useMemo(() => {
+    const t = (post as any)?.type?.toLowerCase?.();
+    const st = (post as any)?.subtype?.toLowerCase?.();
+    if (t === 'question' || st === 'question') return true;
+    const content = (post?.content || '').toString();
+    const lc = content.toLowerCase();
+    const startsWithQuestionWord = ['how ', 'what ', 'why ', 'when ', 'where ', 'who '].some(w => lc.startsWith(w));
+    const mentionsQuestion = lc.includes('question');
+    const hasQuestionMark = content.includes('?');
+    return hasQuestionMark || startsWithQuestionWord || mentionsQuestion;
+  }, [post?.content, (post as any)?.type, (post as any)?.subtype]);
+
   const handleLikeComment = (commentId: string) => {
     if (post) likeComment(post.id, commentId);
   };
@@ -430,7 +458,8 @@ export default function PostDetailScreen() {
       <Stack.Screen 
         options={{
           headerShown: true,
-          headerTitle: post?.type === 'question' ? 'Question' : 'Post',
+          headerTitle: post?.subtype?.toLowerCase() === 'question' ? 'Question' : 'Post',
+
           headerStyle: { backgroundColor: Colors.dark.background },
           headerTitleStyle: { color: Colors.dark.text, fontSize: 18, fontWeight: '600' },
           headerLeft: () => (
@@ -535,11 +564,19 @@ export default function PostDetailScreen() {
           </View>
           
           <View style={styles.commentsSection}>
-            <Text style={styles.commentsTitle}>{post.type === 'question' ? 'Answers' : 'Comments'}</Text>
+          <Text style={styles.commentsTitle}>
+            {isQuestion ? 'Answers' : 'Comments'}
+          </Text>
+
             {commentsByPostId[id] && commentsByPostId[id].length > 0 ? (
               [...commentsByPostId[id]].reverse().map(comment => renderComment(comment))
             ) : (
-              <Text style={styles.noCommentsText}>{post.type === 'question' ? 'No answers yet. Be the first to answer!' : 'No comments yet. Be the first to comment!'}</Text>
+              <Text style={styles.noCommentsText}>
+                {isQuestion
+                  ? 'No answers yet. Be the first to answer!'
+                  : 'No comments yet. Be the first to comment!'}
+              </Text>
+
             )}
           </View>
         </ScrollView>
@@ -564,7 +601,12 @@ export default function PostDetailScreen() {
         />
         <TextInput
           style={styles.commentInput}
-          placeholder={replyingTo ? `Reply to ${replyingTo.author}...` : (post.type === 'question' ? "Add an answer..." : "Add a comment...")}
+          placeholder={
+            replyingTo 
+              ? `Reply to ${replyingTo.author}...` 
+              : (isQuestion ? "Add an answer..." : "Add a comment...")
+          }
+
           placeholderTextColor={Colors.dark.subtext}
           value={commentText}
           onChangeText={setCommentText}

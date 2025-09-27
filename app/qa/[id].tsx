@@ -279,7 +279,7 @@ export default function QADetailScreen() {
         <View style={styles.communityHeader}>
           <View style={styles.communityInfo}>
             <Text style={styles.communityIcon}>{community.icon}</Text>
-            <Text style={styles.communityName}>r/{community.name}</Text>
+            <Text style={styles.communityName}>{community.name}</Text>
           </View>
           <Badge label="Q&A" variant="secondary" size="small" />
         </View>

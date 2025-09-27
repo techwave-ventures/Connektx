@@ -60,7 +60,7 @@ export interface User {
       logo?: string;
       isPrivate: boolean;
     };
-    type?: 'regular' | 'community' | 'poll';
+    type?: 'regular' | 'community' | 'poll' | 'question';
     // Poll-specific fields
     pollOptions?: {
       id: string;
