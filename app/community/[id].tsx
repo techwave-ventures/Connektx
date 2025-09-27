@@ -903,7 +903,7 @@ export default function CommunityDetailScreen() {
                 )}
               </View>
               <View style={styles.communityDetails}>
-                <Text style={styles.communityName}>r/{community.name}</Text>
+                <Text style={styles.communityName}>{community.name}</Text>
                 <View style={styles.communityStats}>
                   <Text style={styles.memberCount}>
                     {community.memberCount.toLocaleString()} members

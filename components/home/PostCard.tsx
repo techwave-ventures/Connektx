@@ -268,7 +268,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
                         post.community.name !== null && 
                         post.community.name !== undefined && 
                         post.community.name.trim() !== '') {
-                      return `r/${post.community.name}`;
+                      return post.community.name;
                     }
                   }
                   
@@ -334,7 +334,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
             <Text style={styles.communityName}>
               {variant === 'communityDetail' ? 
                 (post.community.name && post.community.name !== 'null' && post.community.name.trim() !== '' ? 
-                  `r/${post.community.name}` : 'r/Unknown') : post?.author.name}
+                  post.community.name : 'Unknown') : post?.author.name}
             </Text>
             <View style={styles.communityPrivacyIndicator}>
               {post.community.isPrivate ? (

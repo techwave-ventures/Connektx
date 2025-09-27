@@ -366,7 +366,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           <View style={styles.communityInfo}>
             <View style={styles.communityNameRow}>
             <Text style={styles.communityName}>
-              r/{(() => {
+              {(() => {
                 const name = communityInfo?.name;
                 console.log('🏷️ [CommunityCard] Displaying community name for post:', {
                   postId: post.id,
