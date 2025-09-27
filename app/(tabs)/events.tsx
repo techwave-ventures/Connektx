@@ -861,7 +861,7 @@ export default function EventsScreen() {
           </ScrollView>
         );
         
-      case 'myEvents':
+      /* case 'myEvents':
         return (
           <ScrollView 
             style={styles.tabContent}
@@ -1007,7 +1007,7 @@ export default function EventsScreen() {
               </View>
             )}
           </ScrollView>
-        );
+        ); */
       
       default:
         return null;
@@ -1023,7 +1023,7 @@ export default function EventsScreen() {
         tabs={[
           { id: 'events', label: 'Events' },
           { id: 'tickets', label: 'Tickets' },
-          { id: 'myEvents', label: 'My Events' },
+          /* { id: 'myEvents', label: 'My Events' }, */
         ]}
         activeTab={activeTab}
         onTabChange={setActiveTab}

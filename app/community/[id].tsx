@@ -857,6 +857,7 @@ export default function CommunityDetailScreen() {
           ),
           headerRight: () => (
             <View style={styles.headerActions}>
+              {/* Settings icon hidden
               {canModerateContent() && (
                 <TouchableOpacity 
                   style={styles.headerButton}
@@ -865,9 +866,12 @@ export default function CommunityDetailScreen() {
                   <Settings size={22} color={Colors.dark.text} />
                 </TouchableOpacity>
               )}
+              */}
+              {/* More (three-dot) icon hidden
               <TouchableOpacity style={styles.headerButton}>
                 <MoreHorizontal size={22} color={Colors.dark.text} />
               </TouchableOpacity>
+              */}
             </View>
           ),
         }} 
