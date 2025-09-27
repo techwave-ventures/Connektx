@@ -1107,7 +1107,7 @@ export default function CommunityDetailScreen() {
                           />
                           <View style={styles.answerPostAuthorInfo}>
                             <View style={styles.answerPostAuthorRow}>
-                              <Text style={styles.answerPostAuthorName}>u/{post.authorName}</Text>
+<Text style={styles.answerPostAuthorName}>{post.authorName}</Text>
                               <Badge label="Answer" variant="success" size="small" style={styles.answerPostBadge} />
                             </View>
                             <Text style={styles.answerPostTime}>answered {formatTimeAgo(post.createdAt)}</Text>
@@ -1163,7 +1163,7 @@ export default function CommunityDetailScreen() {
                               name={(post as any).question?.author?.name || 'User'} 
                               size={24} 
                             />
-                            <Text style={styles.questionContextAuthor}>u/{(post as any).question?.author?.name || 'User'} asked:</Text>
+<Text style={styles.questionContextAuthor}>{(post as any).question?.author?.name || 'User'} asked:</Text>
                           </View>
                           <Text style={styles.questionContextContent}>{(post as any).question?.content}</Text>
                         </View>
@@ -1277,7 +1277,7 @@ export default function CommunityDetailScreen() {
                       />
                       <View style={styles.questionPostAuthorInfo}>
                         <View style={styles.questionPostAuthorRow}>
-                          <Text style={styles.questionPostAuthorName}>u/{question.authorName}</Text>
+<Text style={styles.questionPostAuthorName}>{question.authorName}</Text>
                           <Badge label="Question" variant="secondary" size="small" style={styles.questionPostBadge} />
                         </View>
                         <Text style={styles.questionPostTime}>asked {formatTimeAgo(question.createdAt)}</Text>
@@ -1907,7 +1907,7 @@ export default function CommunityDetailScreen() {
                     size={32} 
                   />
                   <View style={styles.qaListItemInfo}>
-                    <Text style={styles.qaListItemAuthor}>u/{question.authorName}</Text>
+<Text style={styles.qaListItemAuthor}>{question.authorName}</Text>
                     <Text style={styles.qaListItemTime}>{formatTimeAgo(question.createdAt)}</Text>
                   </View>
                   <TouchableOpacity style={styles.qaListItemMenu}>
