@@ -78,12 +78,12 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       pathname: `/post/${post.id}` as any,
       params: {
         postData: JSON.stringify({
-          ...post,
+          ...enrichedPost,
           _fromCommunityCard: true // Add metadata to indicate source
         })
       }
     });
-  }, [router, post]);
+  }, [router, enrichedPost]);
   
   const handleShare = useCallback(() => {
     setContentToShare({ id: post.id, type: 'post' });
@@ -134,13 +134,13 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
         pathname: `/post/${post.id}` as any,
         params: {
           postData: JSON.stringify({
-            ...post,
+            ...enrichedPost,
             _fromCommunityCard: true // Add metadata to indicate source
           })
         }
       });
     }
-  }, [onPress, router, post]);
+  }, [onPress, router, enrichedPost]);
   const handleImagePress = (imageUri: string, index: number) => {
     setSelectedImageIndex(index);
     setFullScreenVisible(true);

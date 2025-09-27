@@ -12,61 +12,92 @@ export const enrichCommunityPost = (post: Post): Post => {
     return post;
   }
   
+  // Check if this post should be a question post based on subtype
+  let shouldBeQuestion = (post as any).subtype === 'question';
+  
+  // If post doesn't have subtype, try to find it in community data
+  if (!shouldBeQuestion && post.community?.id) {
+    const communities = useCommunityStore.getState().communities;
+    const community = communities.find(c => c.id === post.community!.id);
+    
+    if (community?.posts) {
+      const communityPost = community.posts.find((cp: any) => cp.id === post.id);
+      if (communityPost) {
+        const communitySubtype = (communityPost as any).subtype;
+        shouldBeQuestion = communitySubtype === 'question';
+        
+        // Update post with subtype for future reference
+        if (communitySubtype) {
+          (post as any).subtype = communitySubtype;
+        }
+      }
+    }
+  }
+  
+  let updatedPost = post;
+  
+  if (shouldBeQuestion && post.type !== 'question') {
+    updatedPost = {
+      ...post,
+      type: 'question' as const
+    };
+  }
+  
   // If post already has a valid community name, check if we can improve it with store data
-  if (post.community?.name && 
-      post.community.name !== 'null' && 
-      post.community.name.trim() !== '' && 
-      post.community.id && 
-      post.community.id !== 'unknown') {
+  if (updatedPost.community?.name && 
+      updatedPost.community.name !== 'null' && 
+      updatedPost.community.name.trim() !== '' && 
+      updatedPost.community.id && 
+      updatedPost.community.id !== 'unknown') {
     
     // Try to get more complete data from store
     const communities = useCommunityStore.getState().communities;
-    const fullCommunityData = communities.find(c => c.id === post.community!.id);
+    const fullCommunityData = communities.find(c => c.id === updatedPost.community!.id);
     
     if (fullCommunityData && fullCommunityData.name) {
-      console.log(`✨ ENRICHING POST: Community "${post.community.name}" -> "${fullCommunityData.name}"`);
+      console.log(`✨ ENRICHING POST: Community "${updatedPost.community.name}" -> "${fullCommunityData.name}"`);
       return {
-        ...post,
+        ...updatedPost,
         community: {
           id: fullCommunityData.id,
           name: fullCommunityData.name,
-          logo: fullCommunityData.logo || post.community.logo || null,
-          isPrivate: fullCommunityData.isPrivate || post.community.isPrivate || false
+          logo: fullCommunityData.logo || updatedPost.community.logo || null,
+          isPrivate: fullCommunityData.isPrivate || updatedPost.community.isPrivate || false
         }
       };
     }
     
     // If no store data but post has valid community info, return as-is
-    return post;
+    return updatedPost;
   }
   
   // If post has community ID but no/invalid name, try to get name from store
-  if (post.community?.id && post.community.id !== 'unknown') {
+  if (updatedPost.community?.id && updatedPost.community.id !== 'unknown') {
     const communities = useCommunityStore.getState().communities;
-    const fullCommunityData = communities.find(c => c.id === post.community!.id);
+    const fullCommunityData = communities.find(c => c.id === updatedPost.community!.id);
     
     if (fullCommunityData && fullCommunityData.name) {
-      console.log(`✨ ENRICHING POST: Community "${post.community?.name || 'null'}" -> "${fullCommunityData.name}"`);
+      console.log(`✨ ENRICHING POST: Community "${updatedPost.community?.name || 'null'}" -> "${fullCommunityData.name}"`);
       return {
-        ...post,
+        ...updatedPost,
         community: {
           id: fullCommunityData.id,
           name: fullCommunityData.name,
-          logo: fullCommunityData.logo || post.community?.logo || null,
-          isPrivate: fullCommunityData.isPrivate || post.community?.isPrivate || false
+          logo: fullCommunityData.logo || updatedPost.community?.logo || null,
+          isPrivate: fullCommunityData.isPrivate || updatedPost.community?.isPrivate || false
         }
       };
     } else {
       // Only log warning if we have communities loaded but can't find this one
       if (communities.length > 0) {
-        console.log(`⚠️ Community not found in store for ID: ${post.community.id}`);
+        console.log(`⚠️ Community not found in store for ID: ${updatedPost.community.id}`);
         console.log(`Available communities:`, communities.map(c => ({ id: c.id, name: c.name })));
       }
     }
   }
   
-  // Return original post if no enrichment possible
-  return post;
+  // Return updated post (which might have corrected type) if no enrichment possible
+  return updatedPost;
 };
 
 /**
@@ -95,6 +126,11 @@ export const convertCommunityPostsToHomeFeed = () => {
     if (community.posts && community.posts.length > 0) {
       console.log(`🏘️ Converting posts from community: "${community.name}" (${community.posts.length} posts)`);
       community.posts.forEach(communityPost => {
+        // Detect post type from type and subtype fields
+        const postType = (communityPost as any).type;
+        const postSubtype = (communityPost as any).subtype;
+        const isQuestion = postType === 'question' || postSubtype === 'question';
+        
         const homeFeedPost = {
           id: communityPost.id,
           author: {
@@ -123,9 +159,9 @@ export const convertCommunityPostsToHomeFeed = () => {
             logo: community.logo || null,
             isPrivate: community.isPrivate,
           },
-          type: (communityPost as any).type === 'question' || (communityPost as any).subtype === 'question' 
+          type: isQuestion 
             ? 'question' as const 
-            : (communityPost as any).type === 'poll' 
+            : postType === 'poll' 
               ? 'poll' as const 
               : 'community' as const,
           pollOptions: (communityPost as any).pollOptions,
