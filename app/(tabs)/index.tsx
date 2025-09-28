@@ -1,6 +1,6 @@
 // app/(tabs)/index.tsx
 
-import React, { useEffect, useState, useCallback, memo } from 'react';
+import React, { useEffect, useState, useCallback, memo, useMemo } from 'react';
 import { 
   View, 
   Text,
@@ -22,8 +22,9 @@ import TabBar from '@/components/ui/TabBar';
 import { StoryViewer } from '@/components/ui/StoryViewer';
 import { usePostStore } from '@/store/post-store';
 import { useAuthStore } from '@/store/auth-store';
+import { useStoryStore } from '@/store/story-store';
 import Colors from '@/constants/colors';
-import { getUser, followingUserStory, saveCommentToStory } from '@/api/user';
+import { getUser, saveCommentToStory } from '@/api/user';
 import { mapUserFromApi } from '@/utils/mapUserFromApi';
 import { Story } from '@/types';
 import { PostCardSkeleton, StoriesSectionSkeleton } from '@/components/ui/SkeletonLoader';
@@ -38,7 +39,7 @@ const HomeScreen = memo(() => {
     posts, 
     stories, 
     fetchPosts, 
-    fetchStories, 
+    // fetchStories, // moved to global story store
     loadMorePosts,
     refreshPosts,
     refreshPostsWithCommunities,
@@ -48,7 +49,10 @@ const HomeScreen = memo(() => {
     error: postsError,
     addStory 
   } = usePostStore();
-  const { user, updateUser, token } = useAuthStore();
+  // Select only slices from auth store to avoid unrelated re-renders
+  const token = useAuthStore(s => s.token);
+  const user = useAuthStore(s => s.user);
+  const updateUser = useAuthStore(s => s.updateUser);
   const { initializeCommunities, communities } = useCommunityStore();
   
   const [refreshing, setRefreshing] = useState(false);
@@ -56,8 +60,13 @@ const HomeScreen = memo(() => {
   const [showStoryViewer, setShowStoryViewer] = useState(false);
   const [currentStories, setCurrentStories] = useState<Story[]>([]);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
-  const [fetchedStories, setFetchedStories] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
+  // Select individual fields/functions from story store to keep references stable
+  const storeUserStories = useStoryStore(s => s.userStories);
+  const followingStoryGroups = useStoryStore(s => s.followingStoryGroups);
+  const storiesLoading = useStoryStore(s => s.isLoading);
+  const initStories = useStoryStore(s => s.fetchOnce);
+  const refreshStories = useStoryStore(s => s.refresh);
   const [lastPostCreatedAt, setLastPostCreatedAt] = useState<number | null>(null);
   const [communityRefreshTrigger, setCommunityRefreshTrigger] = useState(0);
   const insets = useSafeAreaInsets();
@@ -96,8 +105,7 @@ const HomeScreen = memo(() => {
           // Step 3: Fetch posts with community enrichment and stories in parallel (communities now loaded)
           await Promise.all([
             refreshPostsWithCommunities(activeTab as 'latest' | 'trending'),
-            fetchStories(),
-            fetchFollowingStories()
+            initStories()
           ]);
           
         } catch (err) {
@@ -150,73 +158,11 @@ const HomeScreen = memo(() => {
   );
   */
 
-  const fetchFollowingStories = async () => {
-    try {
-      console.log('🚀 Fetching following users stories...');
-      const response = await followingUserStory(token);
-      const rawStories = response || [];
-      console.log('📊 Raw stories from API:', rawStories.length);
-
-      // Group stories by user (exclude current user's own stories)
-      const groupedStories = rawStories.reduce((acc: any, story: any) => {
-        const userId = story.userId._id;
-        const userName = story.userId.name;
-        const userAvatar = story.userId.profileImage || '';
-        const userStreak = story.userId.streak || 0;
-        
-        // Skip current user's own stories
-        if (user?.id && userId === user.id) {
-          console.log('🚫 Filtering out current user\'s story from API response:', userName);
-          return acc;
-        }
-
-        // Map the single story object to the desired format
-        const mappedStory = {
-          id: story._id,
-          url: story.url,
-          type: story.type,
-          viewed: false,
-          createdAt: story.createdAt,
-          overlayData: story.overlayData || null, // Include overlay data
-          user: {
-            id: userId,
-            name: userName,
-            avatar: userAvatar,
-            streak: userStreak,
-          },
-        };
-
-        // If the user already exists in the accumulator, add the new story to their group
-        if (acc[userId]) {
-          acc[userId].stories.push(mappedStory);
-        } else {
-          // Otherwise, create a new user group with the first story
-          acc[userId] = {
-            user: mappedStory.user,
-            stories: [mappedStory],
-          };
-        }
-        return acc;
-      }, {});
-
-      // Convert the grouped object back into an array of story groups
-      const storyGroups = Object.values(groupedStories);
-      
-      console.log('📝 Story groups created:', storyGroups.length);
-      console.log('🗂 Sample story group:', storyGroups[0]);
-
-      setFetchedStories(storyGroups);
-    } catch (err) {
-      console.error('Error fetching following stories:', err);
-      setFetchedStories([]); // Set empty array on error
-    }
-  };
 
   const loadData = async () => {
     await Promise.all([
       fetchPosts(activeTab as 'latest' | 'trending'),
-      fetchStories(),
-      fetchFollowingStories()
+      initStories()
     ]);
   };
 
@@ -233,8 +179,7 @@ const HomeScreen = memo(() => {
           
           await Promise.all([
             refreshPostsWithCommunities(activeTab as 'latest' | 'trending'),
-            fetchStories(),
-            fetchFollowingStories(),
+            refreshStories(),
           ]);
           
           // Community posts are automatically integrated in the post store
@@ -266,11 +211,8 @@ const HomeScreen = memo(() => {
     // This will be handled by the StoryUploadModal in StoriesSection
     // The modal will handle image selection and upload
     // After upload, refresh stories
-    await Promise.all([
-      fetchStories(),
-      fetchFollowingStories()
-    ]);
-  }, []);
+    await refreshStories();
+  }, [refreshStories]);
 
   const handleStoryViewerClose = useCallback(() => {
     setShowStoryViewer(false);
@@ -318,23 +260,19 @@ const HomeScreen = memo(() => {
     }, 100);
   }, [handleLoadMore]);
 
-  // Ensure stories is always an array
-  const safeStories = Array.isArray(stories) ? stories : [];
-  
-  // Filter stories to get only the current user's stories
-  const userStories = user ? safeStories.filter(story => 
-    story?.user?.id && user?.id && story.user.id === user.id
-  ) : [];
+  // Stories come from global story store now
+  const emptyStoriesRef = useMemo<Story[]>(() => [], []);
+  const userStories = storeUserStories;
 
-  const renderHeader = () => (
+  const listHeader = useMemo(() => (
     <>
-      {dataLoading ? (
+      {dataLoading || storiesLoading ? (
         <StoriesSectionSkeleton />
       ) : (
         <StoriesSection
-          stories={safeStories}
+          stories={emptyStoriesRef}
           userStories={userStories}
-          fetchedStories={fetchedStories}
+          fetchedStories={followingStoryGroups}
           onStoryPress={handleStoryPress}
           onAddStory={handleAddStory}
         />
@@ -349,7 +287,7 @@ const HomeScreen = memo(() => {
         style={styles.tabBar}
       />
     </>
-  );
+  ), [dataLoading, storiesLoading, emptyStoriesRef, userStories, followingStoryGroups, handleStoryPress, handleAddStory, activeTab, handleTabChange]);
 
   const renderPost = useCallback(({ item }: { item: any }) => {
     // Enrich community posts with complete community data before rendering
@@ -409,7 +347,7 @@ const HomeScreen = memo(() => {
         
         {(dataLoading || isLoading) && (!posts || posts.length === 0) ? (
           <View style={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}>
-            {renderHeader()}
+            {listHeader}
             {renderSkeletonPosts()}
           </View>
         ) : (
@@ -422,7 +360,7 @@ const HomeScreen = memo(() => {
             }}
             renderItem={renderPost}
             contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}
-            ListHeaderComponent={renderHeader}
+            ListHeaderComponent={listHeader}
             ListFooterComponent={() => {
               // Show error message if there's an error and posts exist
               if (postsError && posts.length > 0) {

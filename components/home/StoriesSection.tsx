@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Text } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import { StoryCircle } from '@/components/ui/StoryCircle';
@@ -23,47 +23,52 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
   fetchedStories = [],
 }) => {
   const [showStoryFlow, setShowStoryFlow] = useState(false);
-  const { user } = useAuthStore();
+  const user = useAuthStore(state => state.user);
 
-  const safeUserStories = Array.isArray(userStories) ? userStories : [];
-  const safeFetchedStories = Array.isArray(fetchedStories) ? fetchedStories : [];
+  const safeUserStories = useMemo(() => (Array.isArray(userStories) ? userStories : []), [userStories]);
+  const safeFetchedStories = useMemo(() => (Array.isArray(fetchedStories) ? fetchedStories : []), [fetchedStories]);
   
   // Use real following users' stories from fetchedStories instead of mock stories
   // Filter out current user's own stories from following stories
-  const groupedStories = safeFetchedStories.reduce((acc, storyGroup) => {
-    if (!storyGroup?.user?.id || !storyGroup?.stories) return acc;
-    
-    const userId = storyGroup.user.id;
-    
-    // Skip if this is the current user's story group
-    if (user?.id && userId === user.id) {
-      console.log('🚫 Filtering out current user\'s story from following stories:', storyGroup.user.name);
+  const groupedStories = useMemo(() => {
+    const out = (safeFetchedStories as any[]).reduce((acc, storyGroup: any) => {
+      if (!storyGroup?.user?.id || !storyGroup?.stories) return acc;
+      
+      const userId = storyGroup.user.id;
+      
+      // Skip if this is the current user's story group
+      if (user?.id && userId === user.id) {
+        return acc;
+      }
+      
+      // Convert the fetched story format to the expected Story format
+      const mappedUserStories = storyGroup.stories.map((story: any) => ({
+        id: story.id,
+        user: storyGroup.user,
+        url: story.url || story.image,
+        type: story.type || 'image',
+        viewed: story.viewed || false,
+        createdAt: story.createdAt,
+        overlayData: story.overlayData
+      }));
+      
+      acc[userId] = mappedUserStories;
       return acc;
-    }
-    
-    // Convert the fetched story format to the expected Story format
-    const userStories = storyGroup.stories.map((story: any) => ({
-      id: story.id,
-      user: storyGroup.user,
-      url: story.url || story.image,
-      type: story.type || 'image',
-      viewed: story.viewed || false,
-      createdAt: story.createdAt,
-      overlayData: story.overlayData
-    }));
-    
-    acc[userId] = userStories;
-    return acc;
-  }, {} as Record<string, Story[]>);
+    }, {} as Record<string, Story[]>);
+
+    return out;
+  }, [safeFetchedStories, user?.id]);
   
-  // Debug logging (after groupedStories is created)
-  console.log('📱 StoriesSection Debug:');
-  console.log('📊 Mock stories count:', stories?.length || 0);
-  console.log('👤 User stories count:', safeUserStories.length);
-  console.log('👥 Fetched following stories count (raw):', safeFetchedStories.length);
-  console.log('🚫 Following stories count (after filtering out own):', Object.keys(groupedStories).length);
-  console.log('📝 Current user ID:', user?.id);
-  console.log('🗂 Sample fetched story group:', safeFetchedStories.slice(0, 1));
+  // Debug logging (only in dev)
+  if (__DEV__) {
+    console.log('📱 StoriesSection Debug:');
+    console.log('📊 Mock stories count:', stories?.length || 0);
+    console.log('👤 User stories count:', safeUserStories.length);
+    console.log('👥 Fetched following stories count (raw):', safeFetchedStories.length);
+    console.log('🚫 Following stories count (after filtering out own):', Object.keys(groupedStories).length);
+    console.log('📝 Current user ID:', user?.id);
+    console.log('🗂 Sample fetched story group:', (safeFetchedStories as any[]).slice(0, 1));
+  }
 
   // New function to handle pressing the user's own story circle
   const handleViewUserStories = () => {
@@ -227,4 +232,38 @@ const styles = StyleSheet.create({
   },
 });
 
-export default StoriesSection;
+// Memoize to prevent unnecessary re-renders
+const areEqual = (prev: StoriesSectionProps, next: StoriesSectionProps) => {
+  // Compare user stories by length and last ID
+  const prevUser = Array.isArray(prev.userStories) ? prev.userStories : [];
+  const nextUser = Array.isArray(next.userStories) ? next.userStories : [];
+  if (prevUser.length !== nextUser.length) return false;
+  const prevUserLast = prevUser.length ? prevUser[prevUser.length - 1].id : undefined;
+  const nextUserLast = nextUser.length ? nextUser[nextUser.length - 1].id : undefined;
+  if (prevUserLast !== nextUserLast) return false;
+
+  // Compare fetched groups by length and simple signature
+  const prevGroups = Array.isArray(prev.fetchedStories) ? prev.fetchedStories : [];
+  const nextGroups = Array.isArray(next.fetchedStories) ? next.fetchedStories : [];
+  if (prevGroups.length !== nextGroups.length) return false;
+  for (let i = 0; i < prevGroups.length; i++) {
+    const p = prevGroups[i] as any;
+    const n = nextGroups[i] as any;
+    const pLen = Array.isArray(p?.stories) ? p.stories.length : 0;
+    const nLen = Array.isArray(n?.stories) ? n.stories.length : 0;
+    if ((p?.user?.id) !== (n?.user?.id)) return false;
+    if (pLen !== nLen) return false;
+    const pLast = pLen ? p.stories[pLen - 1]?.id : undefined;
+    const nLast = nLen ? n.stories[nLen - 1]?.id : undefined;
+    if (pLast !== nLast) return false;
+  }
+
+  // Functions should be memoized by parent
+  if (prev.onAddStory !== next.onAddStory) return false;
+  if (prev.onStoryPress !== next.onStoryPress) return false;
+
+  // We ignore the 'stories' prop as long as the parent passes a stable reference
+  return true;
+};
+
+export default memo(StoriesSection, areEqual);
