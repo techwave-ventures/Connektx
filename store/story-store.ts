@@ -33,6 +33,31 @@ interface StoryState {
   refresh: () => Promise<void>;
 }
 
+function areStoryArraysEqual(a: Story[], b: Story[]) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  const aLast = a.length ? a[a.length - 1]?.id : undefined;
+  const bLast = b.length ? b[b.length - 1]?.id : undefined;
+  return aLast === bLast;
+}
+
+function areGroupsEqual(a: StoryGroup[], b: StoryGroup[]) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ga = a[i];
+    const gb = b[i];
+    if (ga?.user?.id !== gb?.user?.id) return false;
+    const la = Array.isArray(ga?.stories) ? ga.stories.length : 0;
+    const lb = Array.isArray(gb?.stories) ? gb.stories.length : 0;
+    if (la !== lb) return false;
+    const aLast = la ? ga.stories[la - 1]?.id : undefined;
+    const bLast = lb ? gb.stories[lb - 1]?.id : undefined;
+    if (aLast !== bLast) return false;
+  }
+  return true;
+}
+
 export const useStoryStore = create<StoryState>((set, get) => ({
   userStories: [],
   followingStoryGroups: [],
@@ -119,14 +144,18 @@ export const useStoryStore = create<StoryState>((set, get) => ({
 
       const followingStoryGroups = Object.values(groupsByUser);
 
-      set({
-        userStories,
-        followingStoryGroups,
+      const prev = get();
+      const updateUserStories = !areStoryArraysEqual(prev.userStories, userStories);
+      const updateGroups = !areGroupsEqual(prev.followingStoryGroups, followingStoryGroups);
+
+      set((state) => ({
+        userStories: updateUserStories ? userStories : state.userStories,
+        followingStoryGroups: updateGroups ? followingStoryGroups : state.followingStoryGroups,
         isLoading: false,
         error: null,
         hasFetched: true,
         lastToken: token,
-      });
+      }));
     } catch (e: any) {
       console.error('[StoryStore] Failed to fetch stories:', e);
       set({
