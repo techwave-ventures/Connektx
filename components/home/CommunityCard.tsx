@@ -47,11 +47,59 @@ interface CommunityCardProps {
 const MAX_CONTENT_LENGTH = 150;
 const CONTAINER_PADDING = 16;
 
+// Prevent re-renders when post reference changes but relevant fields are unchanged
+const propsAreEqual = (prev: CommunityCardProps, next: CommunityCardProps) => {
+  const p = prev.post as any;
+  const n = next.post as any;
+  // Basic identity and type/community checks
+  if ((p?.id || p?._id) !== (n?.id || n?._id)) return false;
+  if (p?.type !== n?.type) return false;
+  const pCid = p?.community?.id || p?.communityId;
+  const nCid = n?.community?.id || n?.communityId;
+  const pCname = p?.community?.name;
+  const nCname = n?.community?.name;
+  if (pCid !== nCid || pCname !== nCname) return false;
+
+  // Counters and toggles commonly updated by interactions
+  if (p?.likes !== n?.likes) return false;
+  if (p?.comments !== n?.comments) return false;
+  if (p?.reposts !== n?.reposts) return false;
+  if (!!p?.isLiked !== !!n?.isLiked) return false;
+  if (!!p?.isBookmarked !== !!n?.isBookmarked) return false;
+  if (!!p?.isReposted !== !!n?.isReposted) return false;
+
+  // Content hash (length check is cheap proxy for equality without deep compare)
+  const pContentLen = (p?.content || '').length;
+  const nContentLen = (n?.content || '').length;
+  if (pContentLen !== nContentLen) return false;
+
+  // Images count (avoid re-render when array reference changes but count same)
+  const pImgs = Array.isArray(p?.images) ? p.images.length : 0;
+  const nImgs = Array.isArray(n?.images) ? n.images.length : 0;
+  if (pImgs !== nImgs) return false;
+
+  // onPress should be stable from parent
+  if (prev.onPress !== next.onPress) return false;
+
+  return true;
+};
+
 const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => {
   const router = useRouter();
-  const { likePost, bookmarkPost, unlikePost, deletePost, repostPost, unrepostPost, votePoll } = usePostStore();
-  const { user, token } = useAuthStore();
-  const { initializeCommunities, communities } = useCommunityStore();
+  const likePost = usePostStore(s => s.likePost);
+  const bookmarkPost = usePostStore(s => s.bookmarkPost);
+  const unlikePost = usePostStore(s => s.unlikePost);
+  const deletePost = usePostStore(s => s.deletePost);
+  const repostPost = usePostStore(s => s.repostPost);
+  const unrepostPost = usePostStore(s => s.unrepostPost);
+  const votePoll = usePostStore(s => s.votePoll);
+
+  const user = useAuthStore(s => s.user);
+  const token = useAuthStore(s => s.token);
+
+  const initializeCommunities = useCommunityStore(s => s.initializeCommunities);
+  const communities = useCommunityStore(s => s.communities);
+  const communitiesLength = useCommunityStore(s => s.communities.length);
   const [expanded, setExpanded] = useState(false);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
@@ -173,7 +221,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       return enrichCommunityPost(post);
     }
     return post;
-  }, [post, communities]);
+  }, [post]);
 
   // Detect if this post is a question (for Q&A badge)
   const isQuestion = useMemo(() => {
@@ -211,11 +259,12 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
 
   // Get community info with immediate enrichment and robust fallback
   const communityInfo = useMemo(() => {
-    console.log(`🔍 [CommunityCard] Resolving community info for post ${post.id}:`, {
+    const pid = (post as any)?.id || (post as any)?._id;
+    console.log(`🔍 [CommunityCard] Resolving community info for post ${pid}:`, {
       enrichedName: enrichedPost.community?.name,
       originalName: post.community?.name,
       communityId: post.community?.id,
-      communitiesLoaded: communities.length > 0,
+      communitiesLoaded: communitiesLength > 0,
       communityLoadTime,
       postType: post.type,
       authorName: post.author?.name // Add for debugging
@@ -291,17 +340,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           };
           console.log(`✅ [CommunityCard] Found community by post lookup: "${communityData.name}"`);
         } else {
-          // Use first available community as emergency fallback
-          const firstValidCommunity = communities.find(c => c.name && c.name !== 'null' && c.name !== 'undefined' && c.name.trim() !== '');
-          if (firstValidCommunity) {
-            communityData = {
-              id: firstValidCommunity.id || firstValidCommunity._id,
-              name: firstValidCommunity.name,
-              logo: firstValidCommunity.logo || null,
-              isPrivate: firstValidCommunity.isPrivate || false
-            };
-            console.log(`🆘 [CommunityCard] Using first available community as fallback: "${communityData.name}"`);
-          }
+          // Do not use an arbitrary community as fallback; let the final generic fallback handle it.
         }
       }
     }
@@ -341,7 +380,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
     });
     
     return communityData;
-  }, [enrichedPost.community, post.community, communities, communityLoadTime, post.id, post.type, post.author?.name]);
+  }, [enrichedPost.community, post.community, communitiesLength, communityLoadTime, post.type, post.author?.name]);
   
 
   return (
@@ -366,8 +405,9 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
             <Text style={styles.communityName}>
               {(() => {
                 const name = communityInfo?.name;
+                const pid = (post as any)?.id || (post as any)?._id;
                 console.log('🏷️ [CommunityCard] Displaying community name for post:', {
-                  postId: post.id,
+                  postId: pid,
                   displayName: name,
                   communityInfoComplete: JSON.stringify(communityInfo),
                   postType: post.type
@@ -589,7 +629,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       />
     </View>
   );
-});
+}, propsAreEqual);
 
 const styles = StyleSheet.create({
   container: {

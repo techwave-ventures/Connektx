@@ -278,24 +278,12 @@ function mapApiPostToPost(apiPost: any) {
               isPrivate: fallbackCommunity.isPrivate || false,
             };
             console.log(`✅ [Post Mapper] Found community via post lookup: "${fallbackCommunity.name}" for post ${mappedPost.id}`);
-          } else {
-            // Final fallback: check if we have at least one community to avoid showing generic name
-            const firstValidCommunity = communities.find((c: any) => c.name && c.name !== 'null');
-            if (firstValidCommunity) {
-              console.log(`🔍 [Post Mapper] Using first available community "${firstValidCommunity.name}" as fallback for post ${mappedPost.id}`);
-              mappedPost.community = {
-                id: firstValidCommunity.id || firstValidCommunity._id,
-                name: firstValidCommunity.name,
-                logo: firstValidCommunity.logo || null,
-                isPrivate: firstValidCommunity.isPrivate || false,
-              };
-            } else {
-              // Only use generic "Community" as absolute last resort
-              console.log(`⚠️ [Post Mapper] No community data available, using generic fallback for post ${mappedPost.id}`);
-              if (!mappedPost.community) mappedPost.community = {};
-              mappedPost.community.name = 'Community';
-            }
-          }
+        } else {
+          // Do NOT assign an arbitrary community. As a last resort, set a generic name only.
+          console.log(`⚠️ [Post Mapper] No resolvable community for post ${mappedPost.id}, using generic fallback`);
+          if (!mappedPost.community) mappedPost.community = {} as any;
+          mappedPost.community.name = 'Community';
+        }
         }
       } else {
         console.log(`⚠️ [Post Mapper] No communities loaded yet for post ${mappedPost.id}`);

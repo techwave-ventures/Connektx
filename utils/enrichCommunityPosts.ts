@@ -102,9 +102,47 @@ export const enrichCommunityPost = (post: Post): Post => {
 
 /**
  * Enriches multiple community posts with complete community information
+ * and filters out posts that belong to deleted/missing communities.
+ *
+ * A community is considered "deleted" if it is not present in the
+ * community store after initialization. We only apply the filter once
+ * communities have been initialized to avoid hiding content while data
+ * is still loading.
  */
 export const enrichCommunityPosts = (posts: Post[]): Post[] => {
-  return posts.map(enrichCommunityPost);
+  const { communities, isInitialized } = useCommunityStore.getState();
+
+  // If communities are initialized, filter out posts that reference a community
+  // that no longer exists in the store.
+  let filtered = posts;
+  if (isInitialized && Array.isArray(communities) && communities.length >= 0) {
+    const existingIds = new Set(communities.map(c => c.id));
+    const beforeCount = posts.length;
+    filtered = posts.filter(p => {
+      const isCommunityType = p?.type === 'community' || p?.type === 'question';
+      if (!isCommunityType) return true;
+      const cid = p?.community?.id;
+      // Keep only if we have a valid community id that exists in store
+      const keep = !!cid && existingIds.has(cid);
+      if (!keep) {
+        // Optional: sample log to avoid noise
+        if (Math.random() < 0.05) {
+          console.log('🗑️ Skipping post from deleted/missing community', {
+            postId: (p as any)?.id,
+            type: p?.type,
+            communityId: cid,
+          });
+        }
+      }
+      return keep;
+    });
+    const removed = beforeCount - filtered.length;
+    if (removed > 0) {
+      console.log(`🧹 Filtered out ${removed} post(s) from deleted/missing communities`);
+    }
+  }
+
+  return filtered.map(enrichCommunityPost);
 };
 
 /**

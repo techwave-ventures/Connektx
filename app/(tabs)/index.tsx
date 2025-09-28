@@ -35,25 +35,23 @@ import { useCommunityStore } from '@/store/community-store';
 
 const HomeScreen = memo(() => {
   const router = useRouter();
-  const { 
-    posts, 
-    stories, 
-    fetchPosts, 
-    // fetchStories, // moved to global story store
-    loadMorePosts,
-    refreshPosts,
-    refreshPostsWithCommunities,
-    isLoading, 
-    isLoadingMore,
-    hasNextPage,
-    error: postsError,
-    addStory 
-  } = usePostStore();
+  // Select only the slices we actually need from the post store (each individually to avoid getSnapshot warnings)
+  const posts = usePostStore(s => s.posts);
+  const fetchPosts = usePostStore(s => s.fetchPosts);
+  const loadMorePosts = usePostStore(s => s.loadMorePosts);
+  const refreshPosts = usePostStore(s => s.refreshPosts);
+  const refreshPostsWithCommunities = usePostStore(s => s.refreshPostsWithCommunities);
+  const isLoading = usePostStore(s => s.isLoading);
+  const isLoadingMore = usePostStore(s => s.isLoadingMore);
+  const hasNextPage = usePostStore(s => s.hasNextPage);
+  const postsError = usePostStore(s => s.error);
   // Select only slices from auth store to avoid unrelated re-renders
   const token = useAuthStore(s => s.token);
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
-  const { initializeCommunities, communities } = useCommunityStore();
+  // Select specific community store parts to avoid global re-renders
+  const initializeCommunities = useCommunityStore(s => s.initializeCommunities);
+  const communitiesLength = useCommunityStore(s => s.communities.length);
   
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('latest');
@@ -123,7 +121,7 @@ const HomeScreen = memo(() => {
   
   // Force re-render when communities are loaded to update any fallback community names
   useEffect(() => {
-    if (communities.length > 0) {
+    if (communitiesLength > 0) {
       console.log('🏘️ Communities loaded, refreshing posts with community enrichment');
       // Call refreshPostsWithCommunities to update posts with real community names
       refreshPostsWithCommunities(activeTab as 'latest' | 'trending').catch((error) => {
@@ -131,7 +129,7 @@ const HomeScreen = memo(() => {
       });
       setCommunityRefreshTrigger(Date.now());
     }
-  }, [communities.length, activeTab, refreshPostsWithCommunities]);
+  }, [communitiesLength, activeTab, refreshPostsWithCommunities]);
 
   // Refresh posts when screen comes into focus (disabled to prevent auto-refresh after post creation)
   // Posts are automatically added to the feed when created via post store
@@ -289,31 +287,16 @@ const HomeScreen = memo(() => {
     </>
   ), [dataLoading, storiesLoading, emptyStoriesRef, userStories, followingStoryGroups, handleStoryPress, handleAddStory, activeTab, handleTabChange]);
 
+  // Pre-enrich posts once to avoid per-item work on each render
+  const enrichedPosts = useMemo(() => {
+    return Array.isArray(posts) ? enrichCommunityPosts(posts) : [];
+  }, [posts, communitiesLength]);
+
   const renderPost = useCallback(({ item }: { item: any }) => {
-    // Enrich community posts with complete community data before rendering
-    const enrichedPost = item.type === 'community' ? enrichCommunityPosts([item])[0] : item;
-    
-    // AGGRESSIVE TYPE DETECTION: If post has community data, it should be a community post
-    const shouldUseCommunityCard = enrichedPost.type === 'community' || 
-                                  (enrichedPost.community && (enrichedPost.community.id || enrichedPost.community.name));
-    
-    // Override type if we detect community data but type is wrong
-    if (shouldUseCommunityCard && enrichedPost.type !== 'community') {
-      enrichedPost.type = 'community';
-      console.log(`🔄 [HomeScreen] Corrected post type to 'community' for post ${item.id}`);
-    }
-    
-    // Debug logging for component selection
-    console.log(`🔄 [HomeScreen] Rendering post ${item.id}:`, {
-      originalType: item.type,
-      enrichedType: enrichedPost.type,
-      shouldUseCommunityCard,
-      hasCommunityData: !!(enrichedPost.community && (enrichedPost.community.id || enrichedPost.community.name)),
-      communityId: enrichedPost.community?.id,
-      communityName: enrichedPost.community?.name,
-      authorName: enrichedPost.author?.name
-    });
-    
+    // Decide which card to render based on type and presence of community data
+    const shouldUseCommunityCard = item.type === 'community' || 
+      (item.community && (item.community.id || item.community.name));
+
     return (
       <ErrorBoundary
         fallback={
@@ -324,13 +307,13 @@ const HomeScreen = memo(() => {
         }
       >
         {shouldUseCommunityCard ? (
-          <CommunityCard post={enrichedPost} key={`community-${item.id || item._id}-${communityRefreshTrigger}`} />
+          <CommunityCard post={item} />
         ) : (
-          <PostCard post={enrichedPost} />
+          <PostCard post={item} />
         )}
       </ErrorBoundary>
     );
-  }, [communityRefreshTrigger]);
+  }, []);
 
   const renderSkeletonPosts = () => {
     return Array.from({ length: 3 }).map((_, index) => (
@@ -352,7 +335,7 @@ const HomeScreen = memo(() => {
           </View>
         ) : (
           <FlatList
-            data={Array.isArray(posts) ? posts : []}
+            data={enrichedPosts}
             keyExtractor={(item, index) => {
               // Use stable keys based on post ID to prevent unnecessary re-renders
               const id = item?.id || item?._id;
