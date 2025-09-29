@@ -7,6 +7,8 @@ import { useAuthStore } from '@/store/auth-store';
 import Colors from '@/constants/colors';
 import MainStoryFlow from '../ui/MainStoryFlow';
 
+const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
+
 interface StoriesSectionProps {
   stories: Story[];
   onStoryPress: (storyId: string, userStoriesGroup?: Story[], storyIndex?: number) => void;
@@ -59,8 +61,8 @@ export const StoriesSection: React.FC<StoriesSectionProps> = ({
     return out;
   }, [safeFetchedStories, user?.id]);
   
-  // Debug logging (only in dev)
-  if (__DEV__) {
+  // Debug logging (verbose only)
+  if (DEBUG) {
     console.log('📱 StoriesSection Debug:');
     console.log('📊 Mock stories count:', stories?.length || 0);
     console.log('👤 User stories count:', safeUserStories.length);

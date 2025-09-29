@@ -1,6 +1,9 @@
 // hooks/useProfileData.ts
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+
+// Gate hook debug logs behind a debug flag
+const DEBUG_PROFILE = typeof __DEV__ !== 'undefined' && __DEV__ && process.env.LOG_LEVEL === 'verbose';
 import { User } from '@/types';
 import { useAuthStore } from '@/store/auth-store';
 import { usePostStore } from '@/store/post-store';
@@ -62,10 +65,16 @@ export const useProfileData = (options: UseProfileDataOptions) => {
       return cached;
     }
     
-    // Initialize with empty state
+    // Seed posts synchronously from existing stores to avoid blank UI
+    const seedUserId = isOwnProfile ? (currentUser?.id || userId) : userId;
+    const seedPosts = Array.isArray(allPosts)
+      ? allPosts.filter(p => p?.author?.id === seedUserId)
+      : [];
+
+    // Initialize with seeded state
     return {
       user: isOwnProfile ? currentUser : null,
-      posts: [],
+      posts: seedPosts,
       showcases: [],
       portfolioItems: [],
       timestamp: 0,
@@ -89,7 +98,7 @@ export const useProfileData = (options: UseProfileDataOptions) => {
     // Prevent rapid re-fetching
     const now = Date.now();
     if (now - lastFetchRef.current < 1000) {
-      console.log('--- HOOK DEBUG: Throttling fetch request');
+      if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Throttling fetch request');
       return;
     }
     lastFetchRef.current = now;
@@ -108,49 +117,71 @@ export const useProfileData = (options: UseProfileDataOptions) => {
         setRefreshing(true);
       }
 
-      let fetchedUser: User | null = null;
-
-      if (isOwnProfile) {
-        // For own profile, refresh user data
-        await refreshUserData();
-        if (signal.aborted || !mountedRef.current) return;
-        fetchedUser = useAuthStore.getState().user;
-      } else {
-        // For other users, fetch their profile
+      // Start both requests as early as possible
+      const seedUserId = isOwnProfile ? (useAuthStore.getState().user?.id || userId) : userId;
+      const postsPromise = (async () => {
         try {
-          const userResponse = await getUserById(token, userId);
-          if (signal.aborted || !mountedRef.current) return;
-          
-          let userData = userResponse.body || userResponse.user || userResponse;
-          if (!userData) {
-            throw new Error('No user data found in API response');
-          }
-          fetchedUser = mapUserFromApi(userData);
-        } catch (error) {
-          console.error('Failed to fetch user profile:', error);
-          if (signal.aborted || !mountedRef.current) return;
-          // Keep existing user data on error
-          fetchedUser = profileData.user;
+          const resp = await PostAPI.getUserPosts(token, seedUserId);
+          return resp;
+        } catch (e) {
+          return e;
         }
+      })();
+
+      // Fetch user data (own vs other) in parallel
+      let fetchedUser: User | null = null;
+      let userPromise: Promise<void>;
+      if (isOwnProfile) {
+        userPromise = (async () => {
+          await refreshUserData();
+          if (signal.aborted || !mountedRef.current) return;
+          fetchedUser = useAuthStore.getState().user;
+        })();
+      } else {
+        userPromise = (async () => {
+          try {
+            const userResponse = await getUserById(token, userId);
+            if (signal.aborted || !mountedRef.current) return;
+            const userData = userResponse.body || userResponse.user || userResponse;
+            if (!userData) throw new Error('No user data found in API response');
+            fetchedUser = mapUserFromApi(userData);
+          } catch (error) {
+            console.error('Failed to fetch user profile:', error);
+            if (signal.aborted || !mountedRef.current) return;
+            // Keep existing user data on error
+            fetchedUser = profileData.user;
+          }
+        })();
       }
 
+      // Await user and posts concurrently
+      const [postsResp] = await Promise.all([postsPromise, userPromise]);
       if (signal.aborted || !mountedRef.current) return;
 
-      // Fetch user posts explicitly using the API
+      // Map posts response
       let userPostsData: any[] = [];
-      if (fetchedUser) {
-        try {
-          // Always pass user ID to ensure proper filtering
-          const targetUserId = isOwnProfile ? fetchedUser.id : userId;
-          const userPostsResponse = await PostAPI.getUserPosts(token, targetUserId);
-          userPostsData = userPostsResponse.posts || [];
-          console.log('--- HOOK DEBUG: Fetched', userPostsData.length, 'user posts from API');
-        } catch (error) {
-          console.error('Failed to fetch user posts from API:', error);
-          // Fallback to filtering from main store on API error
-          userPostsData = allPosts.filter(post => post.author?.id === fetchedUser.id) || [];
-          console.log('--- HOOK DEBUG: Using fallback filtering, found', userPostsData.length, 'posts');
+      try {
+        const userPostsResponse: any = postsResp;
+        if (userPostsResponse && !(userPostsResponse instanceof Error)) {
+          const rawUserPosts = userPostsResponse?.posts || userPostsResponse?.body || userPostsResponse || [];
+          try {
+            const { mapApiPostToPost } = require('../utils/api-mappers');
+            userPostsData = Array.isArray(rawUserPosts)
+              ? rawUserPosts.map((p: any) => { try { return mapApiPostToPost(p); } catch { return null; } }).filter(Boolean)
+              : [];
+          } catch {
+            userPostsData = Array.isArray(rawUserPosts) ? rawUserPosts : [];
+          }
+          if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Fetched', userPostsData.length, 'user posts from API');
+        } else {
+          throw userPostsResponse || new Error('Posts fetch error');
         }
+      } catch (error) {
+        console.error('Failed to fetch user posts from API:', error);
+        // Fallback to filtering from main store on API error or if user not ready yet
+        const fallbackUserId = fetchedUser?.id || seedUserId;
+        userPostsData = allPosts.filter(post => post.author?.id === fallbackUserId) || [];
+        if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Using fallback filtering, found', userPostsData.length, 'posts');
       }
 
       if (signal.aborted || !mountedRef.current) return;
@@ -158,10 +189,40 @@ export const useProfileData = (options: UseProfileDataOptions) => {
       // Filter other content using stable utility function (but use API posts)
       const filteredContent = filterUserContent(fetchedUser, allPosts, allShowcases, allPortfolioItems);
       
+      // Minimal enrichment of user posts with real community names (ID-matched only)
+      let enrichedUserPosts = userPostsData;
+      try {
+        const { useCommunityStore } = require('../store/community-store');
+        const communities: any[] = useCommunityStore.getState().communities || [];
+        if (Array.isArray(communities) && communities.length > 0 && Array.isArray(userPostsData) && userPostsData.length > 0) {
+          const byId: Record<string, any> = {};
+          for (const c of communities) byId[c.id] = c;
+          enrichedUserPosts = userPostsData.map((p: any) => {
+            try {
+              const isCommunityType = p?.type === 'community' || p?.type === 'question';
+              const cid = p?.community?.id || p?.communityId;
+              if (!isCommunityType || !cid || !byId[cid]) return p;
+              const entity = byId[cid];
+              // If name already present and matches, keep as-is
+              if (p?.community?.name && p.community.name === entity.name) return p;
+              return {
+                ...p,
+                community: {
+                  id: entity.id,
+                  name: entity.name,
+                  logo: entity.logo || p?.community?.logo || null,
+                  isPrivate: !!entity.isPrivate,
+                },
+              };
+            } catch { return p; }
+          });
+        }
+      } catch { /* non-fatal */ }
+      
       // Create new cache entry
       const newProfileData: ProfileDataCache = {
         user: fetchedUser,
-        posts: userPostsData, // Use API-fetched posts instead of filtered ones
+        posts: enrichedUserPosts, // Use API-fetched posts with safe enrichment
         showcases: filteredContent.showcases,
         portfolioItems: filteredContent.portfolioItems,
         timestamp: Date.now(),
@@ -200,7 +261,7 @@ export const useProfileData = (options: UseProfileDataOptions) => {
       await fetchProfileData();
     } else {
       // Update content from current store data without API call
-      console.log('--- HOOK DEBUG: Using cached data, updating content from stores');
+      if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Using cached data, updating content from stores');
       const currentStores = {
         allPosts: usePostStore.getState().posts,
         allShowcases: useShowcaseStore.getState().entries,
@@ -222,7 +283,7 @@ export const useProfileData = (options: UseProfileDataOptions) => {
       );
       
       if (hasContentChanged) {
-        console.log('--- HOOK DEBUG: Content changed, updating showcases/portfolio only');
+        if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Content changed, updating showcases/portfolio only');
         const updatedData = {
           ...currentProfileData,
           posts: currentProfileData.posts, // Keep existing user posts from API
@@ -233,7 +294,7 @@ export const useProfileData = (options: UseProfileDataOptions) => {
         profileCache[userId] = updatedData;
         setProfileData(updatedData);
       } else {
-        console.log('--- HOOK DEBUG: Content unchanged, skipping state update');
+        if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Content unchanged, skipping state update');
       }
     }
   }, [fetchProfileData, userId, cacheTimeout]); // Stable dependencies only
@@ -247,10 +308,10 @@ export const useProfileData = (options: UseProfileDataOptions) => {
     const isCacheValid = cached && (Date.now() - cached.timestamp < cacheTimeout);
     
     if (!isCacheValid) {
-      console.log('--- HOOK DEBUG: Initial fetch triggered for userId:', userId);
+      if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Initial fetch triggered for userId:', userId);
       fetchProfileData();
     } else {
-      console.log('--- HOOK DEBUG: Using cached data for userId:', userId);
+      if (DEBUG_PROFILE) console.log('--- HOOK DEBUG: Using cached data for userId:', userId);
       setProfileData(cached);
     }
   }, [userId, token, enableAutoRefresh, cacheTimeout, fetchProfileData]); // Include fetchProfileData to ensure proper updates

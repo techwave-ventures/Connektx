@@ -2,7 +2,28 @@ import { create } from 'zustand';
 import { Comment } from '../types';
 import { getUserComments } from '../api/user';
 
+// Cache TTL for user comments (in ms)
+const COMMENTS_TTL = 2 * 60 * 1000; // 2 minutes
+
+interface CachedComments {
+  items: (Comment & {
+    post?: {
+      _id: string;
+      content: string;
+      author: {
+        _id: string;
+        name: string;
+        profilePicture?: string;
+      };
+      createdAt: string;
+    };
+  })[];
+  timestamp: number;
+  isLoading: boolean;
+}
+
 interface UserCommentsState {
+  // Current view model (kept for compatibility with existing screens)
   userComments: (Comment & {
     post?: {
       _id: string;
@@ -17,6 +38,11 @@ interface UserCommentsState {
   })[];
   isLoading: boolean;
   error: string | null;
+
+  // New cache by userId
+  userCommentsByUserId: Record<string, CachedComments>;
+  lastUserId?: string;
+
   fetchUserComments: (userId: string) => Promise<void>;
   refreshUserComments: (userId: string) => Promise<void>;
   clearUserComments: () => void;
@@ -26,44 +52,41 @@ export const useUserCommentsStore = create<UserCommentsState>((set, get) => ({
   userComments: [],
   isLoading: false,
   error: null,
+  userCommentsByUserId: {},
+  lastUserId: undefined,
 
   fetchUserComments: async (userId: string) => {
-    set({ isLoading: true, error: null });
+    const state = get();
+    const cache = state.userCommentsByUserId[userId];
+    const now = Date.now();
+
+    // If we have fresh cache, show it immediately and refresh in background
+    if (cache && now - cache.timestamp < COMMENTS_TTL) {
+      set({ userComments: cache.items, isLoading: cache.isLoading, lastUserId: userId, error: null });
+      // Kick off background refresh but do not block UI
+      get().refreshUserComments(userId).catch(() => {});
+      return;
+    }
+
+    // Otherwise, mark loading but don't clear existing comments (avoid blank flash)
+    set({ isLoading: true, error: null, lastUserId: userId });
 
     try {
       const { token } = require('./auth-store').useAuthStore.getState();
-      
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
+      if (!token) throw new Error('No authentication token available');
 
-      console.log('🔍 Fetching user comments for userId:', userId);
       const data = await getUserComments(token, userId);
-      console.log('📦 Raw API response:', JSON.stringify(data, null, 2));
-      
-      // Handle different possible response structures
-      let commentsArray = [];
-      
-      if (Array.isArray(data)) {
-        commentsArray = data;
-      } else if (data && Array.isArray(data.comments)) {
-        commentsArray = data.comments;
-      } else if (data && Array.isArray(data.body)) {
-        commentsArray = data.body;
-      } else if (data && data.success && Array.isArray(data.body)) {
-        commentsArray = data.body;
-      } else {
-        console.log('⚠️ Unexpected response structure, treating as empty array');
-        commentsArray = [];
-      }
-      
-      console.log('📝 Comments array to process:', commentsArray.length, 'items');
-      
+
+      // Normalize response shape
+      let commentsArray: any[] = [];
+      if (Array.isArray(data)) commentsArray = data;
+      else if (data?.comments && Array.isArray(data.comments)) commentsArray = data.comments;
+      else if (Array.isArray(data?.body)) commentsArray = data.body;
+      else if (data?.success && Array.isArray(data?.body)) commentsArray = data.body;
+      else commentsArray = [];
+
       // Map the response to ensure it has the correct structure
       const mappedComments = commentsArray.map((comment: any, index: number) => {
-        console.log(`🔍 Processing comment ${index}:`, JSON.stringify(comment, null, 2));
-        
-        // Safely extract comment data
         const mappedComment = {
           _id: comment._id || comment.id || `temp-id-${index}`,
           id: comment._id || comment.id || `temp-id-${index}`,
@@ -72,10 +95,8 @@ export const useUserCommentsStore = create<UserCommentsState>((set, get) => ({
           createdAt: comment.createdAt || comment.created_at || new Date().toISOString(),
           likes: comment.likes || [],
           replies: comment.replies || [],
-          post: null // Initialize as null, then safely populate
+          post: null as any
         };
-        
-        // Safely extract post data if it exists
         if (comment.post) {
           try {
             mappedComment.post = {
@@ -88,80 +109,53 @@ export const useUserCommentsStore = create<UserCommentsState>((set, get) => ({
               },
               createdAt: comment.post.createdAt || comment.post.created_at || new Date().toISOString()
             };
-          } catch (postError) {
-            console.warn(`⚠️ Error processing post data for comment ${index}:`, postError);
-            mappedComment.post = undefined;
+          } catch {
+            mappedComment.post = undefined as any;
           }
         } else if (comment.postId || comment.post_id) {
-          // If we only have a post ID but no post object, create a minimal post reference
           mappedComment.post = {
             _id: comment.postId || comment.post_id,
             content: 'Post content not available',
-            author: {
-              _id: 'unknown',
-              name: 'Unknown User',
-              profilePicture: undefined
-            },
+            author: { _id: 'unknown', name: 'Unknown User', profilePicture: undefined },
             createdAt: new Date().toISOString()
-          };
+          } as any;
         }
-        
-        console.log(`✅ Mapped comment ${index}:`, JSON.stringify(mappedComment, null, 2));
         return mappedComment;
       });
 
-      console.log('🎉 Final mapped comments:', mappedComments.length, 'items');
-      console.log('📤 Setting userComments state with:', mappedComments.map(c => ({ id: c.id, content: c.content?.substring(0, 50) })));
-      set({ 
-        userComments: mappedComments, 
-        isLoading: false 
-      });
-      console.log('✅ UserComments state updated successfully');
-      const currentState = get();
-      console.log('📊 Current store state after update:', {
-        commentsCount: currentState.userComments.length,
-        isLoading: currentState.isLoading,
-        hasError: !!currentState.error
-      });
+      // Update cache and current view
+      const updated: CachedComments = { items: mappedComments, timestamp: Date.now(), isLoading: false };
+      set((prev) => ({
+        userComments: mappedComments,
+        isLoading: false,
+        error: null,
+        userCommentsByUserId: { ...prev.userCommentsByUserId, [userId]: updated },
+        lastUserId: userId,
+      }));
     } catch (error) {
-      console.error('❌ Error fetching user comments:', error);
+      // Do not clear existing comments on error
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch user comments', 
         isLoading: false,
-        userComments: [] // Clear comments on error
       });
     }
   },
 
   refreshUserComments: async (userId: string) => {
-    // Refresh without showing loading state
+    // Background refresh; keep existing items visible
     try {
       const { token } = require('./auth-store').useAuthStore.getState();
-      
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
+      if (!token) throw new Error('No authentication token available');
 
-      console.log('🔄 Refreshing user comments for userId:', userId);
       const data = await getUserComments(token, userId);
-      
-      // Handle different possible response structures (same as fetchUserComments)
-      let commentsArray = [];
-      
-      if (Array.isArray(data)) {
-        commentsArray = data;
-      } else if (data && Array.isArray(data.comments)) {
-        commentsArray = data.comments;
-      } else if (data && Array.isArray(data.body)) {
-        commentsArray = data.body;
-      } else if (data && data.success && Array.isArray(data.body)) {
-        commentsArray = data.body;
-      } else {
-        console.log('⚠️ Unexpected response structure during refresh, treating as empty array');
-        commentsArray = [];
-      }
-      
-      // Map with the same robust error handling
+
+      let commentsArray: any[] = [];
+      if (Array.isArray(data)) commentsArray = data;
+      else if (data?.comments && Array.isArray(data.comments)) commentsArray = data.comments;
+      else if (Array.isArray(data?.body)) commentsArray = data.body;
+      else if (data?.success && Array.isArray(data?.body)) commentsArray = data.body;
+      else commentsArray = [];
+
       const mappedComments = commentsArray.map((comment: any, index: number) => {
         const mappedComment = {
           _id: comment._id || comment.id || `temp-id-${index}`,
@@ -171,10 +165,8 @@ export const useUserCommentsStore = create<UserCommentsState>((set, get) => ({
           createdAt: comment.createdAt || comment.created_at || new Date().toISOString(),
           likes: comment.likes || [],
           replies: comment.replies || [],
-          post: null
+          post: null as any
         };
-        
-        // Safely extract post data
         if (comment.post) {
           try {
             mappedComment.post = {
@@ -187,32 +179,30 @@ export const useUserCommentsStore = create<UserCommentsState>((set, get) => ({
               },
               createdAt: comment.post.createdAt || comment.post.created_at || new Date().toISOString()
             };
-          } catch (postError) {
-            console.warn(`⚠️ Error processing post data during refresh for comment ${index}:`, postError);
-            mappedComment.post = undefined;
+          } catch {
+            mappedComment.post = undefined as any;
           }
         } else if (comment.postId || comment.post_id) {
           mappedComment.post = {
             _id: comment.postId || comment.post_id,
             content: 'Post content not available',
-            author: {
-              _id: 'unknown',
-              name: 'Unknown User',
-              profilePicture: undefined
-            },
+            author: { _id: 'unknown', name: 'Unknown User', profilePicture: undefined },
             createdAt: new Date().toISOString()
-          };
+          } as any;
         }
-        
         return mappedComment;
       });
 
-      set({ 
-        userComments: mappedComments, 
-        error: null 
-      });
+      const refreshed: CachedComments = { items: mappedComments, timestamp: Date.now(), isLoading: false };
+      set((prev) => ({
+        // Update cache
+        userCommentsByUserId: { ...prev.userCommentsByUserId, [userId]: refreshed },
+        // If this userId is currently selected in view, update the visible list too
+        userComments: prev.lastUserId === userId ? mappedComments : prev.userComments,
+        error: null,
+      }));
     } catch (error) {
-      console.error('❌ Error refreshing user comments:', error);
+      // Keep existing items on error; only record the error
       set({ 
         error: error instanceof Error ? error.message : 'Failed to refresh user comments'
       });

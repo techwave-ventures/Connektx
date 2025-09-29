@@ -12,7 +12,8 @@ import {
   Animated,
   Linking,
   Alert,
-  RefreshControl
+  RefreshControl,
+  FlatList,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import {
@@ -39,6 +40,7 @@ import {
 import Button from '@/components/ui/Button';
 import TabBar from '@/components/ui/TabBar';
 import PostCard from '@/components/home/PostCard';
+import CommunityCard from '@/components/home/CommunityCard';
 import ShowcaseCard from '@/components/showcase/ShowcaseCard';
 import PortfolioGrid from '@/components/portfolio/PortfolioGrid';
 import Avatar from '@/components/ui/Avatar';
@@ -54,6 +56,8 @@ import { findOrCreateConversation } from '@/api/conversation';
 import useProfileData from '@/hooks/useProfileData';
 import UserReply from '@/components/ui/UserReply';
 import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet';
+
+const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
 
 // Memoized tab content component to prevent unnecessary re-renders
 const TabContent = memo<{ tab: string; user: UserType | null; posts: any[]; showcases: any[]; portfolioItems: any[]; isOwnProfile: boolean; onNavigation: (path: string) => void; onDeleteShowcase?: (showcase: any) => void }>(({ tab, user, posts, showcases, portfolioItems, isOwnProfile, onNavigation, onDeleteShowcase }) => {
@@ -294,13 +298,24 @@ const TabContent = memo<{ tab: string; user: UserType | null; posts: any[]; show
       return (
         <View style={styles.tabContent}>
           {posts.length > 0 ? (
-            posts.map((post: any) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                onPress={() => onNavigation(`/post/${post.id}`)}
-              />
-            ))
+            <FlatList
+              data={posts}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <PostCard
+                  post={item}
+                  onPress={() => onNavigation(`/post/${item.id}`)}
+                />
+              )}
+              initialNumToRender={6}
+              maxToRenderPerBatch={8}
+              windowSize={7}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              contentContainerStyle={{ paddingBottom: 16 }}
+            />
           ) : (
             <View style={styles.emptyStateContainer}>
               <Text style={styles.emptyStateText}>
@@ -351,7 +366,8 @@ export default function UserProfileScreen() {
   const { toggleFollow, isLoading, isFollowing: isFollowingUser, initializeFollowing } = useFollowStore();
   const progressValue = useRef(new Animated.Value(0)).current;
   const progressPercent = 10;
-  // Debug profile ownership logic
+// Debug profile ownership logic
+if (DEBUG) {
   console.log('🔎 Profile ownership check:', {
     currentUserId: currentUser?.id,
     currentUser_id: currentUser?._id,
@@ -359,6 +375,7 @@ export default function UserProfileScreen() {
     hasCurrentUser: !!currentUser,
     hasId: !!id
   });
+}
 
   // 2. Add state for the share bottom sheet
   const [isShareVisible, setIsShareVisible] = useState(false);
@@ -371,7 +388,20 @@ export default function UserProfileScreen() {
     currentUser?._id === id.toString()
   );
   
-  console.log('🏠 isOwnProfile result:', isOwnProfile);
+if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
+  
+// If this route points to the current user's own profile, redirect to /profile for consistency
+  React.useLayoutEffect(() => {
+    if (isOwnProfile) {
+      if (DEBUG) console.log('🔁 Redirecting own-profile /profile/[id] -> /profile');
+      router.replace('/profile');
+    }
+  }, [isOwnProfile, router]);
+  
+  // Prevent any rendering while redirecting to avoid flicker
+  if (isOwnProfile) {
+    return null;
+  }
   
   // Initialize with passed user data for instant display
   const initialUserData = userData ? (() => {
@@ -410,21 +440,27 @@ export default function UserProfileScreen() {
       if (currentUser) {
         initializeFollowing();
       }
-    }, [smartRefresh, currentUser, initializeFollowing])
+      // Prefetch replies in background so Replies tab feels instant
+      if (id) {
+        fetchUserComments(id);
+      }
+    }, [smartRefresh, currentUser, initializeFollowing, id, fetchUserComments])
   );
 
   // Fetch user comments when replies tab is active
   React.useEffect(() => {
-    console.log('🔍 Profile replies useEffect triggered:', {
-      activeTab,
-      id,
-      isOwnProfile,
-      currentUserId: currentUser?.id,
-      currentUser_id: currentUser?._id
-    });
+    if (DEBUG) {
+      console.log('🔍 Profile replies useEffect triggered:', {
+        activeTab,
+        id,
+        isOwnProfile,
+        currentUserId: currentUser?.id,
+        currentUser_id: currentUser?._id
+      });
+    }
     
     if (activeTab === 'replies' && id) {
-      console.log('📞 Calling fetchUserComments for userId:', id);
+      if (DEBUG) console.log('📞 Calling fetchUserComments for userId:', id);
       fetchUserComments(id);
     }
   }, [activeTab, id, fetchUserComments, currentUser]);
@@ -442,7 +478,7 @@ export default function UserProfileScreen() {
 
 
   const handleMessage = async () => {
-    console.log('--- PROFILE MSG DEBUG: 1. "Message" button pressed.');
+    if (DEBUG) console.log('--- PROFILE MSG DEBUG: 1. "Message" button pressed.');
     const token = useAuthStore.getState().token;
     
     // Use `profileUser` which holds the data for the profile being viewed
@@ -452,10 +488,10 @@ export default function UserProfileScreen() {
       return;
     }
     
-    console.log(`--- PROFILE MSG DEBUG: 2. Attempting to find/create conversation with user: ${profileUser.id}`);
+    if (DEBUG) console.log(`--- PROFILE MSG DEBUG: 2. Attempting to find/create conversation with user: ${profileUser.id}`);
     try {
       const response = await findOrCreateConversation(profileUser.id, token);
-      console.log('--- PROFILE MSG DEBUG: 3. Received API response:', JSON.stringify(response, null, 2));
+      if (DEBUG) console.log('--- PROFILE MSG DEBUG: 3. Received API response:', JSON.stringify(response, null, 2));
 
       if (response.success && response.body) {
         const conversation = response.body;
@@ -469,7 +505,7 @@ export default function UserProfileScreen() {
           },
         };
 
-        console.log('--- PROFILE MSG DEBUG: 4. Success! Navigating to chat screen with params:', navigationParams);
+        if (DEBUG) console.log('--- PROFILE MSG DEBUG: 4. Success! Navigating to chat screen with params:', navigationParams);
         router.push(navigationParams as any);
       } else {
         throw new Error(response.message || "API response was not successful or body is missing.");
@@ -512,7 +548,7 @@ export default function UserProfileScreen() {
   };
 
   const handleDeletePortfolioItem = (item: any) => {
-    console.log('Delete portfolio item:', item.id);
+    if (DEBUG) console.log('Delete portfolio item:', item.id);
   };
 
   const handleEditProfile = () => {
@@ -947,6 +983,113 @@ export default function UserProfileScreen() {
     }
   };
 
+  const renderHeaderForList = () => (
+    <>
+      <View style={styles.profileSection}>
+        <View style={styles.avatarContainer}>
+          <Avatar source={profileUser.avatar} name={profileUser.name} size={80} showBorder />
+        </View>
+        <View style={styles.profileInfo}>
+          <View style={styles.nameContainer}>
+            <Text style={styles.userName}>{profileUser.name}</Text>
+            {isOwnProfile && (
+              <TouchableOpacity onPress={handleEditProfile}>
+                <Edit2 size={16} color={Colors.dark.subtext} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.userBio}>{profileUser.headline || "i'm on ConnektX"}</Text>
+          <View style={styles.metadataContainer}>
+            {profileUser.location && (
+              <View style={styles.locationContainer}>
+                <MapPin size={14} color={Colors.dark.subtext} />
+                <Text style={styles.locationText}>{profileUser.location}</Text>
+              </View>
+            )}
+            {profileUser.joinedDate && (
+              <View style={styles.joinedContainer}>
+                <Calendar size={14} color={Colors.dark.subtext} />
+                <Text style={styles.joinedText}>Joined {profileUser.joinedDate}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+      {profileUser.socialLinks && profileUser.socialLinks.length > 0 && (
+        <View style={styles.socialLinksContainer}>
+          {profileUser.socialLinks.map((link, index) => (
+            <TouchableOpacity key={index} style={styles.socialIconButton} onPress={() => {}}>
+              {getSocialIcon(link.platform)}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      <View style={styles.actionButtonsContainer}>
+        <View style={styles.profileViewsCard}>
+          <BarChart2 size={20} color={Colors.dark.text} />
+          <Text style={styles.profileViewsNumber}>{profileUser.profileViews}</Text>
+          <Text style={styles.profileViewsText}>Profile Views</Text>
+        </View>
+        <View style={styles.actionButtons}>
+          {isOwnProfile ? (
+            <View style={styles.followStatsContainer}>
+              <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowers}>
+                <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
+                <Text style={styles.followStatLabel}>Followers</Text>
+              </TouchableOpacity>
+              <View style={styles.followStatDivider} />
+              <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowing}>
+                <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
+                <Text style={styles.followStatLabel}>Following</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.otherUserContainer}>
+              <View style={styles.otherUserFollowStats}>
+                <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowers}>
+                  <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
+                  <Text style={styles.followStatLabel}>Followers</Text>
+                </TouchableOpacity>
+                <View style={styles.followStatDivider} />
+                <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowing}>
+                  <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
+                  <Text style={styles.followStatLabel}>Following</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.otherUserActionButtons}>
+                <Button
+                  title={isFollowingUser(profileUser?.id || '') ? "Following" : "Follow"}
+                  onPress={handleFollow}
+                  style={styles.otherUserFollowButton}
+                  variant={isFollowingUser(profileUser?.id || '') ? "outline" : "primary"}
+                  gradient={!isFollowingUser(profileUser?.id || '')}
+                  disabled={isLoading}
+                  size="small"
+                  textStyle={{ fontSize: 14 }}
+                />
+                <Button
+                  title="Message"
+                  onPress={handleMessage}
+                  variant="outline"
+                  style={styles.otherUserMessageButton}
+                  leftIcon={<MessageSquare size={14} color={Colors.dark.text} />}
+                  size="small"
+                />
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+      <TabBar
+        tabs={[{ id: 'about', label: 'About' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'ideas', label: 'Ideas' }]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        scrollable
+        style={styles.tabBar}
+      />
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen
@@ -982,135 +1125,75 @@ export default function UserProfileScreen() {
           ),
         }}
       />
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || commentsLoading}
-            onRefresh={() => {
-              refresh();
-              if (activeTab === 'replies' && id) {
-                refreshUserComments(id);
-              }
-            }}
-            tintColor={Colors.dark.primary}
-            colors={[Colors.dark.primary]}
-          />
-        }
-      >
-        <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            <Avatar source={profileUser.avatar} name={profileUser.name} size={80} showBorder />
-          </View>
-          <View style={styles.profileInfo}>
-            <View style={styles.nameContainer}>
-              <Text style={styles.userName}>{profileUser.name}</Text>
-              {isOwnProfile && (
-                <TouchableOpacity onPress={handleEditProfile}>
-                  <Edit2 size={16} color={Colors.dark.subtext} />
-                </TouchableOpacity>
-              )}
-            </View>
-            <Text style={styles.userBio}>{profileUser.headline || "i'm on ConnektX"}</Text>
-            <View style={styles.metadataContainer}>
-              {profileUser.location && (
-                <View style={styles.locationContainer}>
-                  <MapPin size={14} color={Colors.dark.subtext} />
-                  <Text style={styles.locationText}>{profileUser.location}</Text>
-                </View>
-              )}
-              {profileUser.joinedDate && (
-                <View style={styles.joinedContainer}>
-                  <Calendar size={14} color={Colors.dark.subtext} />
-                  <Text style={styles.joinedText}>Joined {profileUser.joinedDate}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-        {profileUser.socialLinks && profileUser.socialLinks.length > 0 && (
-          <View style={styles.socialLinksContainer}>
-            {profileUser.socialLinks.map((link, index) => (
-              <TouchableOpacity key={index} style={styles.socialIconButton} onPress={() => {}}>
-                {getSocialIcon(link.platform)}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-        <View style={styles.actionButtonsContainer}>
-          <View style={styles.profileViewsCard}>
-            <BarChart2 size={20} color={Colors.dark.text} />
-            <Text style={styles.profileViewsNumber}>{profileUser.profileViews}</Text>
-            <Text style={styles.profileViewsText}>Profile Views</Text>
-          </View>
-          <View style={styles.actionButtons}>
-            {isOwnProfile ? (
-              <View style={styles.followStatsContainer}>
-                <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowers}>
-                  <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
-                  <Text style={styles.followStatLabel}>Followers</Text>
-                </TouchableOpacity>
-                <View style={styles.followStatDivider} />
-                <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowing}>
-                  <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
-                  <Text style={styles.followStatLabel}>Following</Text>
-                </TouchableOpacity>
-              </View>
+      {activeTab === 'posts' ? (
+        <FlatList
+          data={userPosts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => {
+            const shouldUseCommunityCard = item?.type === 'community' || item?.type === 'question' ||
+              (item?.community && (item.community.id || item.community.name));
+            return shouldUseCommunityCard ? (
+              <CommunityCard post={item} />
             ) : (
-              <View style={styles.otherUserContainer}>
-                <View style={styles.otherUserFollowStats}>
-                  <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowers}>
-                    <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
-                    <Text style={styles.followStatLabel}>Followers</Text>
-                  </TouchableOpacity>
-                  <View style={styles.followStatDivider} />
-                  <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowing}>
-                    <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
-                    <Text style={styles.followStatLabel}>Following</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.otherUserActionButtons}>
-                  <Button
-                    title={isFollowingUser(profileUser?.id || '') ? "Following" : "Follow"}
-                    onPress={handleFollow}
-                    style={styles.otherUserFollowButton}
-                    variant={isFollowingUser(profileUser?.id || '') ? "outline" : "primary"}
-                    gradient={!isFollowingUser(profileUser?.id || '')}
-                    disabled={isLoading}
-                    size="small"
-                    textStyle={{ fontSize: 14 }}
-                  />
-                  <Button
-                    title="Message"
-                    onPress={handleMessage}
-                    variant="outline"
-                    style={styles.otherUserMessageButton}
-                    leftIcon={<MessageSquare size={14} color={Colors.dark.text} />}
-                    size="small"
-                    textStyle={{ fontSize: 14 }}
-                  />
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-        <TabBar
-          tabs={[
-            { id: 'about', label: 'About' },
-            { id: 'portfolio', label: 'Portfolio' },
-            { id: 'posts', label: 'Posts' },
-            { id: 'replies', label: 'Replies' },
-            { id: 'ideas', label: 'Ideas' },
-          ]}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          scrollable
-          style={styles.tabBar}
+              <PostCard
+                post={item}
+                onPress={() => handlePostPress(item)}
+              />
+            );
+          }}
+          ListHeaderComponent={renderHeaderForList}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateText}>
+                {isOwnProfile ? "You haven't created any posts yet" : "No posts available"}
+              </Text>
+              {isOwnProfile && (
+                <Button
+                  title="Create Post"
+                  onPress={() => onNavigation('/post/create')}
+                  style={styles.emptyStateButton}
+                />
+              )}
+            </View>
+          )}
+          refreshing={refreshing || commentsLoading}
+          onRefresh={() => {
+            refresh();
+            if (activeTab === 'replies' && id) {
+              refreshUserComments(id);
+            }
+          }}
+          initialNumToRender={6}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 16 }}
         />
-        {renderTabContent()}
-      </ScrollView>
+      ) : (
+        <ScrollView 
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing || commentsLoading}
+              onRefresh={() => {
+                refresh();
+                if (activeTab === 'replies' && id) {
+                  refreshUserComments(id);
+                }
+              }}
+              tintColor={Colors.dark.primary}
+              colors={[Colors.dark.primary]}
+            />
+          }
+        >
+          {renderHeaderForList()}
+          {renderTabContent()}
+        </ScrollView>
+      )}
 
-      {/* 6. Add the ShareBottomSheet component at the end */}
+      {/* Share Sheet */}
       <ShareBottomSheet
         visible={isShareVisible}
         onClose={handleCloseShareSheet}

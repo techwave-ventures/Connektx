@@ -3,6 +3,9 @@
  * Robust API post mapper that handles various API response formats
  */
 
+// Gate verbose logs behind a debug flag
+const DEBUG_MAPPER = typeof __DEV__ !== 'undefined' && __DEV__ && process.env.LOG_LEVEL === 'verbose';
+
 /**
  * Safely gets ID from various API response formats
  */
@@ -35,7 +38,7 @@ export const safeGetAuthor = (apiPost: any): any => {
   // Debug author data processing (only log if no author found)
   const hasAnyAuthorData = apiPost.author || apiPost.user || apiPost.userId || apiPost.UserId || apiPost.authorName;
   if (!hasAnyAuthorData) {
-    console.log('👤 [API Mapper] No author data found in post:', {
+    if (DEBUG_MAPPER) console.log('👤 [API Mapper] No author data found in post:', {
       hasAuthor: !!apiPost.author,
       hasUser: !!apiPost.user,
       hasUserId: !!apiPost.userId,
@@ -56,7 +59,7 @@ export const safeGetAuthor = (apiPost: any): any => {
       avatar: apiPost.author.avatar || apiPost.author.profileImage || '',
       headline: apiPost.author.headline || apiPost.author.bio || '',
     };
-    console.log('✅ [API Mapper] Using full author object:', author.name);
+    if (DEBUG_MAPPER) console.log('✅ [API Mapper] Using full author object:', author.name);
     return author;
   }
 
@@ -72,7 +75,7 @@ export const safeGetAuthor = (apiPost: any): any => {
       avatar: apiPost.user.avatar || apiPost.user.profileImage || '',
       headline: apiPost.user.headline || apiPost.user.bio || '',
     };
-    console.log('✅ [API Mapper] Using user object as author:', author.name);
+    if (DEBUG_MAPPER) console.log('✅ [API Mapper] Using user object as author:', author.name);
     return author;
   }
 
@@ -90,12 +93,12 @@ export const safeGetAuthor = (apiPost: any): any => {
     };
     // Only log if we have incomplete data
     if (!apiPost.authorName || !apiPost.authorAvatar) {
-      console.log('⚠️ [API Mapper] Using incomplete separate author fields:', author.name);
+      if (DEBUG_MAPPER) console.log('⚠️ [API Mapper] Using incomplete separate author fields:', author.name);
     }
     return author;
   }
 
-  console.warn('⚠️ [API Mapper] No author data found in post, creating fallback author');
+  if (DEBUG_MAPPER) console.warn('⚠️ [API Mapper] No author data found in post, creating fallback author');
   
   // Create a fallback author using any available data
   return {
@@ -204,7 +207,7 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
                           apiPost.communityId || 
                           (apiPost.community && apiPost.community.id);
 
-  console.log('🗺️ [API Mapper] Starting post mapping for:', postId, {
+  if (DEBUG_MAPPER) console.log('🗺️ [API Mapper] Starting post mapping for:', postId, {
     hasSubtype: !!apiPost.subtype,
     subtype: apiPost.subtype,
     hasType: !!apiPost.type,
@@ -229,7 +232,7 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
       const mappedType = apiPost.subtype === 'question' ? 'question' : 
                         apiPost.type === 'poll' ? 'poll' : 
                         (apiPost.type || 'community').toLowerCase();
-      console.log('➡️ [API Mapper] Type mapping result for', postId, ':', {
+      if (DEBUG_MAPPER) console.log('➡️ [API Mapper] Type mapping result for', postId, ':', {
         originalSubtype: apiPost.subtype,
         originalType: apiPost.type,
         mappedType: mappedType
@@ -253,7 +256,7 @@ export const mapApiPostToPost = (apiPost: any, currentUserId?: string): any | nu
                           apiPost.communityName.toString().trim() !== '' &&
                           apiPost.communityName !== 'undefined';
       if (!hasValidName) {
-        console.log(`⚠️ [API Mapper] No valid community name found for post ${postId}:`, {
+        if (DEBUG_MAPPER) console.log(`⚠️ [API Mapper] No valid community name found for post ${postId}:`, {
           communityName: apiPost.communityName,
           communityId: apiPost.communityId,
           type: typeof apiPost.communityName,

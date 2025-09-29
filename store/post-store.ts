@@ -196,13 +196,16 @@ function mapApiPostToPost(apiPost: any) {
   const mappedPost = robustMapApiPostToPost(apiPost, currentUserId);
   if (!mappedPost) return null;
 
+  // Gate verbose post-mapper logs behind a debug flag
+  const DEBUG_POST_MAPPER = typeof __DEV__ !== 'undefined' && __DEV__ && process.env.LOG_LEVEL === 'verbose';
+
   // AGGRESSIVE COMMUNITY ENRICHMENT for community posts
   if (mappedPost.type === 'community') {
     try {
       const { useCommunityStore } = require('./community-store');
       const communities = useCommunityStore.getState().communities || [];
       
-      console.log(`🔍 [Post Mapper] Community post ${mappedPost.id}: current community name "${mappedPost.community?.name}", available communities: ${communities.length}`);
+      if (DEBUG_POST_MAPPER) console.log(`🔍 [Post Mapper] Community post ${mappedPost.id}: current community name "${mappedPost.community?.name}", available communities: ${communities.length}`);
       
       // Always try to enrich community data if we have communities loaded
       if (communities.length > 0) {
@@ -213,7 +216,7 @@ function mapApiPostToPost(apiPost: any) {
           enrichedCommunity = communities.find((community: any) => 
             community.id === mappedPost.community!.id || community._id === mappedPost.community!.id
           );
-          if (enrichedCommunity) {
+          if (enrichedCommunity && DEBUG_POST_MAPPER) {
             console.log(`✅ [Post Mapper] Found community by ID: "${enrichedCommunity.name}"`);
           }
         }
@@ -227,7 +230,7 @@ function mapApiPostToPost(apiPost: any) {
                post?.id === mappedPost.id || post?._id === mappedPost.id)
             )
           );
-          if (enrichedCommunity) {
+          if (enrichedCommunity && DEBUG_POST_MAPPER) {
             console.log(`✅ [Post Mapper] Found community by post membership: "${enrichedCommunity.name}"`);
           }
         }
@@ -241,7 +244,7 @@ function mapApiPostToPost(apiPost: any) {
           enrichedCommunity = communities.find((community: any) => 
             community.name === mappedPost.community!.name
           );
-          if (enrichedCommunity) {
+          if (enrichedCommunity && DEBUG_POST_MAPPER) {
             console.log(`✅ [Post Mapper] Found community by name match: "${enrichedCommunity.name}"`);
           }
         }
@@ -254,10 +257,10 @@ function mapApiPostToPost(apiPost: any) {
             logo: enrichedCommunity.logo || mappedPost.community?.logo || null,
             isPrivate: enrichedCommunity.isPrivate || false,
           };
-          console.log(`🔄 [Post Mapper] Enriched post ${mappedPost.id} with community "${enrichedCommunity.name}"`);
+          if (DEBUG_POST_MAPPER) console.log(`🔄 [Post Mapper] Enriched post ${mappedPost.id} with community "${enrichedCommunity.name}"`);
         } else if (!mappedPost.community?.name || mappedPost.community.name === 'null' || mappedPost.community.name === null || mappedPost.community.name === undefined) {
           // More aggressive fallback: try to find ANY community that might contain this post
-          console.log(`⚠️ [Post Mapper] No community data found for post ${mappedPost.id}, trying alternative lookup...`);
+          if (DEBUG_POST_MAPPER) console.log(`⚠️ [Post Mapper] No community data found for post ${mappedPost.id}, trying alternative lookup...`);
           
           // Check if any community has this post in their posts array
           const fallbackCommunity = communities.find((community: any) => {
@@ -277,25 +280,25 @@ function mapApiPostToPost(apiPost: any) {
               logo: fallbackCommunity.logo || null,
               isPrivate: fallbackCommunity.isPrivate || false,
             };
-            console.log(`✅ [Post Mapper] Found community via post lookup: "${fallbackCommunity.name}" for post ${mappedPost.id}`);
+            if (DEBUG_POST_MAPPER) console.log(`✅ [Post Mapper] Found community via post lookup: "${fallbackCommunity.name}" for post ${mappedPost.id}`);
         } else {
           // Do NOT assign an arbitrary community. As a last resort, set a generic name only.
-          console.log(`⚠️ [Post Mapper] No resolvable community for post ${mappedPost.id}, using generic fallback`);
+          if (DEBUG_POST_MAPPER) console.log(`⚠️ [Post Mapper] No resolvable community for post ${mappedPost.id}, using generic fallback`);
           if (!mappedPost.community) mappedPost.community = {} as any;
           mappedPost.community.name = 'Community';
         }
         }
       } else {
-        console.log(`⚠️ [Post Mapper] No communities loaded yet for post ${mappedPost.id}`);
+        if (DEBUG_POST_MAPPER) console.log(`⚠️ [Post Mapper] No communities loaded yet for post ${mappedPost.id}`);
         // When no communities are loaded yet, preserve any existing community name from API
         // Only fallback to generic if we truly have no community information
         if (!mappedPost.community?.name || mappedPost.community.name === 'null' || mappedPost.community.name === null || mappedPost.community.name === undefined || mappedPost.community.name.trim() === '') {
           if (!mappedPost.community) mappedPost.community = {};
           // Use more descriptive fallback to distinguish from enriched posts
           mappedPost.community.name = 'Unknown Community';
-          console.log(`📝 [Post Mapper] Set temporary fallback name for post ${mappedPost.id}`);
+          if (DEBUG_POST_MAPPER) console.log(`📝 [Post Mapper] Set temporary fallback name for post ${mappedPost.id}`);
         } else {
-          console.log(`💾 [Post Mapper] Preserving existing community name "${mappedPost.community.name}" for post ${mappedPost.id}`);
+          if (DEBUG_POST_MAPPER) console.log(`💾 [Post Mapper] Preserving existing community name "${mappedPost.community.name}" for post ${mappedPost.id}`);
         }
       }
     } catch (error) {

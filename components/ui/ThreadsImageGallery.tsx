@@ -36,6 +36,17 @@ export const ThreadsImageGallery: React.FC<ThreadsImageGalleryProps> = memo(({
   imageSpacing = 8,
   maxWidth,
 }) => {
+  // Filter out stale ImagePicker cache URIs that may be deleted on disk
+  const imagesToRender = React.useMemo(() => {
+    if (!Array.isArray(images)) return [] as (string | ImageData)[];
+    const isBadLocal = (uri: string) => typeof uri === 'string' && uri.includes('/cache/ImagePicker/');
+    return images.filter((item: string | ImageData) => {
+      const uri = typeof item === 'string' ? item : item?.uri;
+      if (!uri || typeof uri !== 'string') return false;
+      if (isBadLocal(uri)) return false;
+      return true;
+    });
+  }, [images]);
   const [imageDimensions, setImageDimensions] = useState<{ [key: string]: { width: number; height: number } }>({});
 
   const handleImageLoad = (imageUri: string, width: number, height: number) => {
@@ -119,14 +130,14 @@ export const ThreadsImageGallery: React.FC<ThreadsImageGalleryProps> = memo(({
     );
   };
 
-  if (!images || images.length === 0) return null;
+  if (!imagesToRender || imagesToRender.length === 0) return null;
 
   return (
     <View style={styles.container}>
-      {images.length === 1 ? (
+      {imagesToRender.length === 1 ? (
         // Single image - full width
         <View style={styles.singleImageContainer}>
-          {renderImage(images[0], 0)}
+          {renderImage(imagesToRender[0], 0)}
         </View>
       ) : (
         // Multiple images - horizontal scroll
@@ -139,7 +150,7 @@ export const ThreadsImageGallery: React.FC<ThreadsImageGalleryProps> = memo(({
           ]}
           style={styles.scrollView}
         >
-          {images.map((item, index) => renderImage(item, index))}
+          {imagesToRender.map((item, index) => renderImage(item as any, index))}
         </ScrollView>
       )}
     </View>

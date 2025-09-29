@@ -37,6 +37,8 @@ import Colors from '@/constants/colors';
 import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet';
 import { enrichCommunityPost, getCommunityById } from '@/utils/enrichCommunityPosts';
 
+const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
+
 const { width } = Dimensions.get('window');
 
 interface CommunityCardProps {
@@ -217,7 +219,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
 
   // Enrich post with real community data or ensure communities are loaded
   const enrichedPost = useMemo(() => {
-    if (post.type === 'community') {
+    if (post.type === 'community' || (post as any)?.type === 'question') {
       return enrichCommunityPost(post);
     }
     return post;
@@ -260,15 +262,17 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
   // Get community info with immediate enrichment and robust fallback
   const communityInfo = useMemo(() => {
     const pid = (post as any)?.id || (post as any)?._id;
-    console.log(`🔍 [CommunityCard] Resolving community info for post ${pid}:`, {
-      enrichedName: enrichedPost.community?.name,
-      originalName: post.community?.name,
-      communityId: post.community?.id,
-      communitiesLoaded: communitiesLength > 0,
-      communityLoadTime,
-      postType: post.type,
-      authorName: post.author?.name // Add for debugging
-    });
+    if (DEBUG) {
+      console.log(`🔍 [CommunityCard] Resolving community info for post ${pid}:`, {
+        enrichedName: enrichedPost.community?.name,
+        originalName: post.community?.name,
+        communityId: post.community?.id,
+        communitiesLoaded: communitiesLength > 0,
+        communityLoadTime,
+        postType: post.type,
+        authorName: post.author?.name // Add for debugging
+      });
+    }
     
     // AGGRESSIVE COMMUNITY NAME RESOLUTION: Try all possible sources
     let communityData = null;
@@ -284,7 +288,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
         logo: enrichedPost.community.logo || null,
         isPrivate: enrichedPost.community.isPrivate || false
       };
-      console.log(`✅ [CommunityCard] Using enriched community data: "${communityData.name}"`);
+      if (DEBUG) console.log(`✅ [CommunityCard] Using enriched community data: "${communityData.name}"`);
     }
     
     // 2. If no enriched data, try original post community data
@@ -298,7 +302,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
         logo: post.community.logo || null,
         isPrivate: post.community.isPrivate || false
       };
-      console.log(`✅ [CommunityCard] Using original post community data: "${communityData.name}"`);
+      if (DEBUG) console.log(`✅ [CommunityCard] Using original post community data: "${communityData.name}"`);
     }
     
     // 3. If we have community ID but no name, try to get from store immediately
@@ -314,7 +318,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           logo: communityFromStore.logo || null,
           isPrivate: communityFromStore.isPrivate || false
         };
-        console.log(`✅ [CommunityCard] Using store lookup community data: "${communityData.name}"`);
+        if (DEBUG) console.log(`✅ [CommunityCard] Using store lookup community data: "${communityData.name}"`);
       }
     }
     
@@ -338,7 +342,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
             logo: foundCommunity.logo || null,
             isPrivate: foundCommunity.isPrivate || false
           };
-          console.log(`✅ [CommunityCard] Found community by post lookup: "${communityData.name}"`);
+          if (DEBUG) console.log(`✅ [CommunityCard] Found community by post lookup: "${communityData.name}"`);
         } else {
           // Do not use an arbitrary community as fallback; let the final generic fallback handle it.
         }
@@ -353,15 +357,17 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
         logo: post.community?.logo || null,
         isPrivate: post.community?.isPrivate || false
       };
-      console.log('⚠️ [CommunityCard] Using final fallback community name "Community" for post:', {
-        postId: post.id,
-        enrichedName: enrichedPost.community?.name,
-        originalName: post.community?.name,
-        communityId: post.community?.id,
-        storeHasCommunities: communities.length > 0,
-        postType: post.type,
-        authorName: post.author?.name
-      });
+      if (DEBUG) {
+        console.log('⚠️ [CommunityCard] Using final fallback community name "Community" for post:', {
+          postId: post.id,
+          enrichedName: enrichedPost.community?.name,
+          originalName: post.community?.name,
+          communityId: post.community?.id,
+          storeHasCommunities: communities.length > 0,
+          postType: post.type,
+          authorName: post.author?.name
+        });
+      }
     }
     
     // Double check final result and ensure we never show author name as community name
@@ -370,14 +376,16 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       communityData.name = 'Community';
     }
     
-    console.log(`🏁 [CommunityCard] Final community info for post ${post.id}:`, {
-      name: communityData.name,
-      id: communityData.id,
-      hasLogo: !!communityData.logo,
-      isPrivate: communityData.isPrivate,
-      authorName: post.author?.name,
-      differentFromAuthor: communityData.name !== post.author?.name
-    });
+    if (DEBUG) {
+      console.log(`🏁 [CommunityCard] Final community info for post ${post.id}:`, {
+        name: communityData.name,
+        id: communityData.id,
+        hasLogo: !!communityData.logo,
+        isPrivate: communityData.isPrivate,
+        authorName: post.author?.name,
+        differentFromAuthor: communityData.name !== post.author?.name
+      });
+    }
     
     return communityData;
   }, [enrichedPost.community, post.community, communitiesLength, communityLoadTime, post.type, post.author?.name]);
@@ -406,12 +414,14 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
               {(() => {
                 const name = communityInfo?.name;
                 const pid = (post as any)?.id || (post as any)?._id;
-                console.log('🏷️ [CommunityCard] Displaying community name for post:', {
-                  postId: pid,
-                  displayName: name,
-                  communityInfoComplete: JSON.stringify(communityInfo),
-                  postType: post.type
-                });
+                if (DEBUG) {
+                  console.log('🏷️ [CommunityCard] Displaying community name for post:', {
+                    postId: pid,
+                    displayName: name,
+                    communityInfoComplete: communityInfo,
+                    postType: post.type
+                  });
+                }
                 
                 // Aggressive null/undefined/empty check
                 if (!name || 
@@ -420,13 +430,15 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
                     name === null || 
                     name === undefined || 
                     (typeof name === 'string' && name.trim() === '')) {
-                  console.log('⚠️ [CommunityCard] Blocked null/empty community name display for:', {
-                    postId: post.id,
-                    communityInfoName: name,
-                    typeof: typeof name,
-                    originalCommunityName: post.community?.name,
-                    enrichedCommunityName: enrichedPost.community?.name
-                  });
+                  if (DEBUG) {
+                    console.log('⚠️ [CommunityCard] Blocked null/empty community name display for:', {
+                      postId: post.id,
+                      communityInfoName: name,
+                      typeof: typeof name,
+                      originalCommunityName: post.community?.name,
+                      enrichedCommunityName: enrichedPost.community?.name
+                    });
+                  }
                   return 'Community';
                 }
                 return name;

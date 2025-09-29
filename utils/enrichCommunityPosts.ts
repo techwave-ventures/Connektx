@@ -3,6 +3,8 @@
 import { useCommunityStore } from '../store/community-store';
 import { Post } from '../types';
 
+const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
+
 /**
  * Enriches community posts with complete community information from the community store
  */
@@ -55,7 +57,7 @@ export const enrichCommunityPost = (post: Post): Post => {
     const fullCommunityData = communities.find(c => c.id === updatedPost.community!.id);
     
     if (fullCommunityData && fullCommunityData.name) {
-      console.log(`✨ ENRICHING POST: Community "${updatedPost.community.name}" -> "${fullCommunityData.name}"`);
+      if (DEBUG) console.log(`✨ ENRICHING POST: Community "${updatedPost.community.name}" -> "${fullCommunityData.name}"`);
       return {
         ...updatedPost,
         community: {
@@ -77,7 +79,7 @@ export const enrichCommunityPost = (post: Post): Post => {
     const fullCommunityData = communities.find(c => c.id === updatedPost.community!.id);
     
     if (fullCommunityData && fullCommunityData.name) {
-      console.log(`✨ ENRICHING POST: Community "${updatedPost.community?.name || 'null'}" -> "${fullCommunityData.name}"`);
+      if (DEBUG) console.log(`✨ ENRICHING POST: Community "${updatedPost.community?.name || 'null'}" -> "${fullCommunityData.name}"`);
       return {
         ...updatedPost,
         community: {
@@ -89,7 +91,7 @@ export const enrichCommunityPost = (post: Post): Post => {
       };
     } else {
       // Only log warning if we have communities loaded but can't find this one
-      if (communities.length > 0) {
+      if (DEBUG && communities.length > 0) {
         console.log(`⚠️ Community not found in store for ID: ${updatedPost.community.id}`);
         console.log(`Available communities:`, communities.map(c => ({ id: c.id, name: c.name })));
       }
@@ -121,12 +123,12 @@ export const enrichCommunityPosts = (posts: Post[]): Post[] => {
     filtered = posts.filter(p => {
       const isCommunityType = p?.type === 'community' || p?.type === 'question';
       if (!isCommunityType) return true;
-      const cid = p?.community?.id;
+      const cid = p?.community?.id || (p as any)?.communityId;
       // Keep only if we have a valid community id that exists in store
-      const keep = !!cid && existingIds.has(cid);
+      const keep = !!cid && existingIds.has(cid as string);
       if (!keep) {
         // Optional: sample log to avoid noise
-        if (Math.random() < 0.05) {
+        if (DEBUG && Math.random() < 0.05) {
           console.log('🗑️ Skipping post from deleted/missing community', {
             postId: (p as any)?.id,
             type: p?.type,
@@ -137,7 +139,7 @@ export const enrichCommunityPosts = (posts: Post[]): Post[] => {
       return keep;
     });
     const removed = beforeCount - filtered.length;
-    if (removed > 0) {
+    if (DEBUG && removed > 0) {
       console.log(`🧹 Filtered out ${removed} post(s) from deleted/missing communities`);
     }
   }
@@ -162,7 +164,7 @@ export const convertCommunityPostsToHomeFeed = () => {
   
   communities.forEach(community => {
     if (community.posts && community.posts.length > 0) {
-      console.log(`🏘️ Converting posts from community: "${community.name}" (${community.posts.length} posts)`);
+      if (DEBUG) console.log(`🏘️ Converting posts from community: "${community.name}" (${community.posts.length} posts)`);
       community.posts.forEach(communityPost => {
         // Detect post type from type and subtype fields
         const postType = (communityPost as any).type;
