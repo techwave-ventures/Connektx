@@ -304,7 +304,11 @@ const TabContent = memo<{ tab: string; user: UserType | null; posts: any[]; show
               renderItem={({ item }) => (
                 <PostCard
                   post={item}
-                  onPress={() => onNavigation(`/post/${item.id}`)}
+                  onPress={() => {
+                    // Pass full post data via query param so PostDetail can render instantly
+                    const postParam = encodeURIComponent(JSON.stringify({ ...item, _fromPostCard: true }));
+                    onNavigation(`/post/${item.id}?postData=${postParam}`);
+                  }}
                 />
               )}
               initialNumToRender={6}
@@ -517,7 +521,13 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
   };
 
   const handlePostPress = (post: Post) => {
-    router.push(`/post/${post.id}`);
+    // Pass the full post data so PostDetail can render immediately without showing a loading spinner
+    router.push({
+      pathname: `/post/${post.id}` as any,
+      params: {
+        postData: JSON.stringify({ ...post, _fromPostCard: true })
+      }
+    });
   };
 
   const handleShowcasePress = (showcase: ShowcaseEntry) => {
@@ -909,7 +919,22 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
                     comment={comment}
                     onPress={() => {
                       if (comment.post?._id) {
-                        router.push(`/post/${comment.post._id}`);
+                        // Pass minimal post data from the comment so detail can render instantly
+                        const minimalPost = {
+                          id: comment.post._id,
+                          content: comment.post.content || '',
+                          author: {
+                            name: comment.post.author?.name || 'Unknown User',
+                            avatar: comment.post.author?.profilePicture || ''
+                          },
+                          images: [],
+                          likes: 0,
+                          comments: 0
+                        } as any;
+                        router.push({
+                          pathname: `/post/${comment.post._id}` as any,
+                          params: { postData: JSON.stringify(minimalPost) }
+                        });
                       }
                     }}
                   />
