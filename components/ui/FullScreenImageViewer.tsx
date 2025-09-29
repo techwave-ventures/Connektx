@@ -98,7 +98,8 @@ export const FullScreenImageViewer: React.FC<FullScreenImageViewerProps> = ({
   const renderOverlay = () => (
     <Animated.View
       style={[styles.overlay, { opacity: fadeAnim }]}
-      pointerEvents={overlayVisible ? 'auto' : 'none'}
+      // Allow touches to pass through where there are no overlay children (so FlatList can swipe)
+      pointerEvents={overlayVisible ? 'box-none' : 'none'}
     >
       {/* Top bar */}
       <SafeAreaView style={styles.topBar}>
