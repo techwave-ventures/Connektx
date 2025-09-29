@@ -233,7 +233,7 @@ export default function PostDetailScreen() {
       
       // Background fetch for fresh data and comments without showing loading
       fetchComments(id);
-      fetchPostById(id).then(freshPost => {
+      fetchPostById(id, { addToFeed: false }).then(freshPost => {
         if (freshPost && freshPost.id === id) {
           console.log('🔄 [PostDetail] Updated with fresh data from API (background)');
           
@@ -273,7 +273,7 @@ export default function PostDetailScreen() {
     console.warn('❌ [PostDetail] Post not found in store, fetching from API with loading...');
     setIsLoadingPost(true);
     
-    fetchPostById(id).then(fetchedPost => {
+    fetchPostById(id, { addToFeed: false }).then(fetchedPost => {
       if (fetchedPost) {
         console.log('✅ [PostDetail] Successfully fetched post from API:', fetchedPost.id);
         setPost(fetchedPost);

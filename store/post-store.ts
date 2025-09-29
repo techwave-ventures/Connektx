@@ -13,6 +13,8 @@ interface PostState {
   isLoadingMore: boolean;
   error: string | null;
   commentsByPostId: { [postId: string]: Comment[] };
+  // Additional cache for individual post lookups (does not pollute feed)
+  postsById: Record<string, Post>;
   // Pagination state
   currentPage: number;
   hasNextPage: boolean;
@@ -40,7 +42,7 @@ interface PostState {
   repostPost: (postId: string, comment?: string) => Promise<void>;
   unrepostPost: (postId: string) => Promise<void>;
   getPost: (postId: string) => Post | undefined;
-  fetchPostById: (postId: string) => Promise<Post | null>;
+  fetchPostById: (postId: string, options?: { addToFeed?: boolean }) => Promise<Post | null>;
   votePoll: (postId: string, optionId: string) => Promise<void>;
 }
 
@@ -331,6 +333,7 @@ export const usePostStore = create<PostState>((set, get) => ({
   isLoadingMore: false,
   error: null,
   commentsByPostId: {},
+  postsById: {},
   // Pagination initial state
   currentPage: 1,
   hasNextPage: true,
@@ -1704,10 +1707,11 @@ fetchStories: async () => {
 
   getPost: (postId) => {
     const state = get();
-    return state.posts.find(post => post.id === postId);
+    // Prefer cache first, fall back to feed list
+    return state.postsById[postId] || state.posts.find(post => post.id === postId);
   },
 
-  fetchPostById: async (postId: string) => {
+  fetchPostById: async (postId: string, options?: { addToFeed?: boolean }) => {
     console.log('🔍 [PostStore] Fetching post by ID:', postId);
     
     // Check if post already exists in store
@@ -1849,12 +1853,18 @@ fetchStories: async () => {
             }
           }
           
-          // Add the fetched post to the store
-          set(state => ({
-            posts: [mappedPost, ...state.posts.filter(p => p.id !== mappedPost.id)], // Add to beginning, remove duplicates
-            isLoading: false,
-            error: null
-          }));
+          // Cache the fetched post without polluting the Home feed by default
+          set(state => {
+            const addToFeed = options?.addToFeed === true;
+            return {
+              posts: addToFeed
+                ? [mappedPost, ...state.posts.filter(p => p.id !== mappedPost.id)]
+                : state.posts,
+              postsById: { ...state.postsById, [mappedPost.id]: mappedPost },
+              isLoading: false,
+              error: null
+            };
+          });
           
           return mappedPost;
           
