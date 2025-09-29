@@ -39,11 +39,11 @@ export const ThreadsImageGallery: React.FC<ThreadsImageGalleryProps> = memo(({
   // Filter out stale ImagePicker cache URIs that may be deleted on disk
   const imagesToRender = React.useMemo(() => {
     if (!Array.isArray(images)) return [] as (string | ImageData)[];
-    const isBadLocal = (uri: string) => typeof uri === 'string' && uri.includes('/cache/ImagePicker/');
+    // Allow local ImagePicker cache URIs for freshly created posts so images show immediately.
+    // Expo Image will handle errors for genuinely missing files via onError.
     return images.filter((item: string | ImageData) => {
       const uri = typeof item === 'string' ? item : item?.uri;
       if (!uri || typeof uri !== 'string') return false;
-      if (isBadLocal(uri)) return false;
       return true;
     });
   }, [images]);
