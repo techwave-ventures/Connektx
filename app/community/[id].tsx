@@ -1206,7 +1206,7 @@ export default function CommunityDetailScreen() {
                         {/* Answer Actions */}
                         <View style={styles.answerPostActions}>
                           <View style={styles.answerVoteContainer}>
-                            <Heart size={16} color={(post as any).likedByCurrentUser || post.likes?.includes(user?.id || '') ? Colors.dark.primary : Colors.dark.subtext} fill={(post as any).likedByCurrentUser || post.likes?.includes(user?.id || '') ? Colors.dark.primary : 'none'} />
+                            <Heart size={18} color={(post as any).likedByCurrentUser || post.likes?.includes(user?.id || '') ? Colors.dark.error : Colors.dark.text} fill={(post as any).likedByCurrentUser || post.likes?.includes(user?.id || '') ? Colors.dark.error : 'none'} />
                             <Text style={styles.answerVoteCount}>{typeof (post as any).likesCount === 'number' ? (post as any).likesCount : (post.likes?.length || 0)}</Text>
                           </View>
                           
@@ -1396,9 +1396,9 @@ export default function CommunityDetailScreen() {
                           return (
                             <>
                               <Heart 
-                                size={16} 
-                                color={isLikedEff ? Colors.dark.primary : Colors.dark.subtext}
-                                fill={isLikedEff ? Colors.dark.primary : 'none'}
+                                size={20} 
+                                color={isLikedEff ? Colors.dark.error : Colors.dark.text}
+                                fill={isLikedEff ? Colors.dark.error : 'none'}
                               />
                               <Text style={styles.questionStatText}>{likesEff}</Text>
                             </>
@@ -1407,7 +1407,7 @@ export default function CommunityDetailScreen() {
                       </TouchableOpacity>
                       
                       <View style={styles.questionStatItem}>
-                        <MessageSquare size={16} color={Colors.dark.subtext} />
+                        <MessageSquare size={20} color={Colors.dark.text} />
                         <Text style={styles.questionStatText}>{question.comments?.length || 0} answers</Text>
                       </View>
                       
@@ -1985,9 +1985,9 @@ export default function CommunityDetailScreen() {
                       return (
                         <>
                           <Heart 
-                            size={14} 
-                            color={isLikedEff ? Colors.dark.primary : Colors.dark.subtext}
-                            fill={isLikedEff ? Colors.dark.primary : 'none'}
+                            size={20} 
+                            color={isLikedEff ? Colors.dark.error : Colors.dark.text}
+                            fill={isLikedEff ? Colors.dark.error : 'none'}
                           />
                           <Text style={styles.qaListItemStatText}>{likesEff}</Text>
                         </>
@@ -1995,7 +1995,7 @@ export default function CommunityDetailScreen() {
                     })()}
                   </TouchableOpacity>
                   <View style={styles.qaListItemStat}>
-                    <MessageSquare size={14} color={Colors.dark.subtext} />
+                    <MessageSquare size={18} color={Colors.dark.text} />
                     <Text style={styles.qaListItemStatText}>{question.comments.length}</Text>
                   </View>
                   <View style={styles.qaListItemStat}>
@@ -3071,9 +3071,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   qaListItemStatText: {
-    color: Colors.dark.subtext,
-    fontSize: 13,
-    fontWeight: '500',
+    color: Colors.dark.text,
+    fontSize: 15,
+    marginLeft: 6,
   },
   qaListEmptyState: {
     flex: 1,
@@ -3218,22 +3218,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   questionStatText: {
-    color: Colors.dark.subtext,
-    fontSize: 13,
-    fontWeight: '500',
+    color: Colors.dark.text,
+    fontSize: 15,
+    marginLeft: 6,
   },
   answerQuestionButton: {
     marginLeft: 'auto',
-    backgroundColor: `${Colors.dark.primary}15`,
+    backgroundColor: Colors.dark.card,
     borderWidth: 1,
-    borderColor: Colors.dark.primary,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderColor: Colors.dark.text,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   answerQuestionText: {
-    color: Colors.dark.primary,
-    fontSize: 12,
+    color: Colors.dark.text,
+    fontSize: 16,
     fontWeight: '600',
   },
 
