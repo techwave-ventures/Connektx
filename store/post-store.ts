@@ -635,7 +635,10 @@ fetchStories: async () => {
   likePost: async (postId) => {
     // Update centralized metadata first
     set(state => {
-      const currentMeta = state.postMeta[postId] || { likes: 0, isLiked: false, bookmarked: false, comments: 0 };
+      const p = state.posts.find(p => p.id === postId) as any;
+      const baseLikes = typeof p?.likes === 'number' ? p.likes : (typeof p?.likesCount === 'number' ? p.likesCount : 0);
+      const baseIsLiked = !!p?.isLiked;
+      const currentMeta = state.postMeta[postId] || { likes: baseLikes, isLiked: baseIsLiked, bookmarked: !!p?.isBookmarked, comments: typeof p?.comments === 'number' ? p.comments : 0 };
       const newMeta = {
         ...currentMeta,
         likes: currentMeta.likes + 1,
@@ -810,7 +813,10 @@ fetchStories: async () => {
   unlikePost: async(postId) => {
     // Update centralized metadata first
     set(state => {
-      const currentMeta = state.postMeta[postId] || { likes: 1, isLiked: true, bookmarked: false, comments: 0 };
+      const p = state.posts.find(p => p.id === postId) as any;
+      const baseLikes = typeof p?.likes === 'number' ? p.likes : (typeof p?.likesCount === 'number' ? p.likesCount : 0);
+      const baseIsLiked = !!p?.isLiked;
+      const currentMeta = state.postMeta[postId] || { likes: baseLikes, isLiked: baseIsLiked, bookmarked: !!p?.isBookmarked, comments: typeof p?.comments === 'number' ? p.comments : 0 };
       const newMeta = {
         ...currentMeta,
         likes: Math.max(0, currentMeta.likes - 1),
