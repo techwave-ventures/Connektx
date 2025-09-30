@@ -15,6 +15,8 @@ interface PostState {
   commentsByPostId: { [postId: string]: Comment[] };
   // Additional cache for individual post lookups (does not pollute feed)
   postsById: Record<string, Post>;
+  // Centralized post metadata registry for cross-component sync
+  postMeta: { [postId: string]: { likes: number; isLiked: boolean; bookmarked: boolean; comments: number } };
   // Pagination state
   currentPage: number;
   hasNextPage: boolean;
@@ -31,6 +33,9 @@ interface PostState {
   likePost: (postId: string) => void;
   unlikePost: (postId: string) => void;
   bookmarkPost: (postId: string) => void;
+  // Centralized metadata getters for cross-component sync
+  getPostMeta: (postId: string) => { likes: number; isLiked: boolean; bookmarked: boolean; comments: number } | null;
+  updatePostMeta: (postId: string, updates: Partial<{ likes: number; isLiked: boolean; bookmarked: boolean; comments: number }>) => void;
   addComment: (postId: string, content: string) => Promise<void>;
   fetchComments: (postId: string) => Promise<void>;
   likeComment: (postId: string, commentId: string) => void;
@@ -334,6 +339,7 @@ export const usePostStore = create<PostState>((set, get) => ({
   error: null,
   commentsByPostId: {},
   postsById: {},
+  postMeta: {},
   // Pagination initial state
   currentPage: 1,
   hasNextPage: true,
@@ -482,8 +488,22 @@ export const usePostStore = create<PostState>((set, get) => ({
           console.log(`🔄 Added ${newPostsOnly.length} new posts to ${existingPosts.length} existing posts`);
         }
         
+        // Build post metadata registry from posts
+        const newPostMeta = { ...state.postMeta };
+        finalPosts.forEach((post: any) => {
+          if (post?.id) {
+            newPostMeta[post.id] = {
+              likes: typeof post.likes === 'number' ? post.likes : (post.likesCount || 0),
+              isLiked: !!post.isLiked,
+              bookmarked: !!post.isBookmarked,
+              comments: typeof post.comments === 'number' ? post.comments : 0
+            };
+          }
+        });
+        
         return {
           posts: finalPosts,
+          postMeta: newPostMeta,
           isLoading: false,
           isLoadingMore: false,
           isFetching: false, // Clear fetch guard
@@ -554,6 +574,27 @@ export const usePostStore = create<PostState>((set, get) => ({
     await get().refreshPosts(filter);
   },
 
+  // Centralized post metadata helpers
+  getPostMeta: (postId: string) => {
+    const meta = get().postMeta[postId];
+    return meta || null;
+  },
+  updatePostMeta: (postId: string, updates) => {
+    set(state => {
+      const prev = state.postMeta[postId] || { likes: 0, isLiked: false, bookmarked: false, comments: 0 };
+      const next = { ...prev, ...updates };
+      return {
+        postMeta: { ...state.postMeta, [postId]: next },
+        posts: state.posts.map(p => p.id === postId ? { ...p,
+          likes: updates.likes !== undefined ? updates.likes : p.likes,
+          isLiked: updates.isLiked !== undefined ? updates.isLiked : p.isLiked,
+          isBookmarked: updates.bookmarked !== undefined ? updates.bookmarked : p.isBookmarked,
+          comments: updates.comments !== undefined ? updates.comments : p.comments,
+        } : p)
+      };
+    });
+  },
+
  
 fetchStories: async () => {
     const { token, user } = useAuthStore.getState();
@@ -592,18 +633,32 @@ fetchStories: async () => {
 
 
   likePost: async (postId) => {
-    // Optimistic UI update first (home feed)
-    set(state => ({
-      posts: state.posts.map(post =>
-        post.id === postId
-          ? {
-              ...post,
-              likes: post.likes + 1,
-              isLiked: true
-            }
-          : post
-      )
-    }));
+    // Update centralized metadata first
+    set(state => {
+      const currentMeta = state.postMeta[postId] || { likes: 0, isLiked: false, bookmarked: false, comments: 0 };
+      const newMeta = {
+        ...currentMeta,
+        likes: currentMeta.likes + 1,
+        isLiked: true
+      };
+      
+      return {
+        postMeta: {
+          ...state.postMeta,
+          [postId]: newMeta
+        },
+        posts: state.posts.map(post =>
+          post.id === postId
+            ? {
+                ...post,
+                likes: newMeta.likes,
+                isLiked: newMeta.isLiked
+              }
+            : post
+        )
+      };
+    });
+    
     // Persist liked state
     try {
       const { useLikeStore } = require('./like-store');
@@ -648,6 +703,15 @@ fetchStories: async () => {
 
       // Sync with server response (corrects any discrepancies) in home feed
       set(state => ({
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: finalLikes !== undefined ? finalLikes : (state.postMeta[postId]?.likes ?? state.posts.find(p=>p.id===postId)?.likes ?? 0),
+            isLiked: true,
+            bookmarked: state.postMeta[postId]?.bookmarked ?? (state.posts.find(p=>p.id===postId)?.isBookmarked ?? false),
+            comments: state.postMeta[postId]?.comments ?? (state.posts.find(p=>p.id===postId)?.comments ?? 0)
+          }
+        },
         posts: state.posts.map(post =>
           post.id === (updatedPost?._id || postId)
             ? {
@@ -691,6 +755,15 @@ fetchStories: async () => {
       console.error('Error liking post:', error);
       // Rollback optimistic update on error (home feed)
       set(state => ({
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: Math.max(0, (state.postMeta[postId]?.likes ?? state.posts.find(p=>p.id===postId)?.likes ?? 1) - 1),
+            isLiked: false,
+            bookmarked: state.postMeta[postId]?.bookmarked ?? (state.posts.find(p=>p.id===postId)?.isBookmarked ?? false),
+            comments: state.postMeta[postId]?.comments ?? (state.posts.find(p=>p.id===postId)?.comments ?? 0)
+          }
+        },
         posts: state.posts.map(post =>
           post.id === postId
             ? {
@@ -735,18 +808,32 @@ fetchStories: async () => {
   },
 
   unlikePost: async(postId) => {
-    // Optimistic UI update first (home feed)
-    set(state => ({
-      posts: state.posts.map(post =>
-        post.id === postId
-          ? {
-              ...post,
-              likes: Math.max(0, post.likes - 1),
-              isLiked: false
-            }
-          : post
-      )
-    }));
+    // Update centralized metadata first
+    set(state => {
+      const currentMeta = state.postMeta[postId] || { likes: 1, isLiked: true, bookmarked: false, comments: 0 };
+      const newMeta = {
+        ...currentMeta,
+        likes: Math.max(0, currentMeta.likes - 1),
+        isLiked: false
+      };
+      
+      return {
+        postMeta: {
+          ...state.postMeta,
+          [postId]: newMeta
+        },
+        posts: state.posts.map(post =>
+          post.id === postId
+            ? {
+                ...post,
+                likes: newMeta.likes,
+                isLiked: newMeta.isLiked
+              }
+            : post
+        )
+      };
+    });
+    
     try {
       const { useLikeStore } = require('./like-store');
       useLikeStore.getState().setLiked(String(postId), false);
@@ -787,6 +874,15 @@ fetchStories: async () => {
       const finalLikes = typeof updatedPost?.likes === 'number' ? updatedPost.likes : undefined;
       // Sync with server response (corrects any discrepancies)
       set(state => ({
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: finalLikes !== undefined ? finalLikes : (state.postMeta[postId]?.likes ?? state.posts.find(p=>p.id===postId)?.likes ?? 0),
+            isLiked: false,
+            bookmarked: state.postMeta[postId]?.bookmarked ?? (state.posts.find(p=>p.id===postId)?.isBookmarked ?? false),
+            comments: state.postMeta[postId]?.comments ?? (state.posts.find(p=>p.id===postId)?.comments ?? 0)
+          }
+        },
         posts: state.posts.map(post =>
           post.id === (updatedPost?._id || postId)
             ? {
@@ -827,6 +923,15 @@ fetchStories: async () => {
       console.error('Error unliking post:', error);
       // Rollback optimistic update on error (home feed)
       set(state => ({
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: (state.postMeta[postId]?.likes ?? state.posts.find(p=>p.id===postId)?.likes ?? 0) + 1,
+            isLiked: true,
+            bookmarked: state.postMeta[postId]?.bookmarked ?? (state.posts.find(p=>p.id===postId)?.isBookmarked ?? false),
+            comments: state.postMeta[postId]?.comments ?? (state.posts.find(p=>p.id===postId)?.comments ?? 0)
+          }
+        },
         posts: state.posts.map(post =>
           post.id === postId
             ? {
@@ -875,14 +980,26 @@ fetchStories: async () => {
     const currentPost = get().posts.find(post => post.id === postId);
     const previousBookmarkState = currentPost?.isBookmarked || false;
 
-    // Optimistic UI update first
-    set((state) => ({
-      posts: state.posts.map((post) =>
-        post.id === postId
-          ? { ...post, isBookmarked: !post.isBookmarked }
-          : post
-      ),
-    }));
+    // Optimistic UI update first (posts + centralized meta)
+    set((state) => {
+      const nextBookmarked = !previousBookmarkState;
+      return {
+        posts: state.posts.map((post) =>
+          post.id === postId
+            ? { ...post, isBookmarked: nextBookmarked }
+            : post
+        ),
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: state.postMeta[postId]?.likes ?? (currentPost?.likes ?? 0),
+            isLiked: state.postMeta[postId]?.isLiked ?? (currentPost?.isLiked ?? false),
+            bookmarked: nextBookmarked,
+            comments: state.postMeta[postId]?.comments ?? (currentPost?.comments ?? 0)
+          }
+        }
+      };
+    });
 
     // Then make API call in background
     try {
@@ -913,6 +1030,15 @@ fetchStories: async () => {
             ? { ...post, isBookmarked: previousBookmarkState }
             : post
         ),
+        postMeta: {
+          ...state.postMeta,
+          [postId]: {
+            likes: state.postMeta[postId]?.likes ?? (currentPost?.likes ?? 0),
+            isLiked: state.postMeta[postId]?.isLiked ?? (currentPost?.isLiked ?? false),
+            bookmarked: previousBookmarkState,
+            comments: state.postMeta[postId]?.comments ?? (currentPost?.comments ?? 0)
+          }
+        }
       }));
     }
   },

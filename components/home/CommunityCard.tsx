@@ -36,6 +36,7 @@ import { useCommunityStore } from '@/store/community-store';
 import Colors from '@/constants/colors';
 import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet';
 import { enrichCommunityPost, getCommunityById } from '@/utils/enrichCommunityPosts';
+import { useLikeStore } from '@/store/like-store';
 
 const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
 
@@ -114,13 +115,46 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
   const displayContent = useMemo(() => shouldTruncate && !expanded ? `${post.content.substring(0, MAX_CONTENT_LENGTH)}...` : post.content, [post.content, shouldTruncate, expanded]);
   const formattedDate = useMemo(() => new Date(post.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), [post.createdAt]);
 
+  // Use centralized registry when available, fall back to persisted like state during hydration
+  const meta = usePostStore(s => s.getPostMeta(post.id));
+  const persistedLiked = useLikeStore(s => s.isLiked(post.id));
+  const hasHydrated = (useLikeStore as any)?.persist?.hasHydrated?.() ?? false;
+  const effectiveIsLiked = (meta?.isLiked ?? null) !== null
+    ? (meta!.isLiked)
+    : (hasHydrated ? persistedLiked : !!post.isLiked);
+  const effectiveLikes = useMemo(() => {
+    if (meta && typeof meta.likes === 'number') return meta.likes;
+    const base = typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0;
+    const wasLiked = !!post.isLiked;
+    if (!hasHydrated) return base;
+    if (effectiveIsLiked && !wasLiked) return base + 1;
+    if (!effectiveIsLiked && wasLiked) return Math.max(0, base - 1);
+    return base;
+  }, [meta, post.likes, (post as any).likesCount, post.isLiked, effectiveIsLiked, hasHydrated]);
+
   const handleLike = useCallback(() => {
-    post.isLiked ? unlikePost(post.id) : likePost(post.id);
-  }, [post.id, post.isLiked, unlikePost, likePost]);
+    effectiveIsLiked ? unlikePost(post.id) : likePost(post.id);
+  }, [post.id, effectiveIsLiked, unlikePost, likePost]);
 
   const handleBookmark = useCallback(() => {
     bookmarkPost(post.id);
   }, [post.id, bookmarkPost]);
+
+  // Seed centralized meta if missing (supports lists outside home feed)
+  useEffect(() => {
+    if (!meta) {
+      try {
+        (usePostStore.getState().updatePostMeta as any)?.(post.id, {
+          likes: typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0,
+          isLiked: !!post.isLiked,
+          bookmarked: !!post.isBookmarked,
+          comments: typeof post.comments === 'number' ? post.comments : 0,
+        });
+      } catch {}
+    }
+  // Only on mount / post identity change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
   
   const handleComment = useCallback(() => {
     // Pass post data to avoid loading screen (similar to notifications)
@@ -551,8 +585,8 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       {/* Actions */}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-          <Heart size={22} color={post?.isLiked ? Colors.dark.error : Colors.dark.text} fill={post?.isLiked ? Colors.dark.error : 'transparent'} />
-          <Text style={styles.actionText}>{post.likes}</Text>
+          <Heart size={22} color={effectiveIsLiked ? Colors.dark.error : Colors.dark.text} fill={effectiveIsLiked ? Colors.dark.error : 'transparent'} />
+          <Text style={styles.actionText}>{effectiveLikes}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
           <MessageCircle size={22} color={Colors.dark.text} />
@@ -578,9 +612,9 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
           images={post.images}
           initialIndex={selectedImageIndex}
           postId={post.id}
-          likes={post.likes}
+          likes={effectiveLikes}
           comments={post.comments}
-          isLiked={post.isLiked}
+          isLiked={effectiveIsLiked}
           onClose={handleCloseFullScreen}
           onLike={handleLike}
           onComment={handleComment}

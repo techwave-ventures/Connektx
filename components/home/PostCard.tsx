@@ -101,7 +101,22 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   const persistedLiked = useLikeStore(s => s.isLiked(post.id));
   const setPersistedLiked = useLikeStore(s => s.setLiked);
   const hasHydrated = (useLikeStore as any)?.persist?.hasHydrated?.() ?? false;
-  const effectiveIsLiked = hasHydrated ? (persistedLiked || post.isLiked) : post.isLiked;
+  const meta = usePostStore(s => s.getPostMeta(post.id));
+  // Prefer centralized registry if available; otherwise fall back to persisted or server flag
+  const effectiveIsLiked = (meta?.isLiked ?? null) !== null
+    ? (meta!.isLiked)
+    : (hasHydrated ? persistedLiked : post.isLiked);
+
+  // Effective like count from centralized registry when available
+  const effectiveLikes = useMemo(() => {
+    if (meta && typeof meta.likes === 'number') return meta.likes;
+    const base = typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0;
+    const wasLiked = !!post.isLiked;
+    if (!hasHydrated) return base; // before hydration, trust server props
+    if (effectiveIsLiked && !wasLiked) return base + 1; // liked locally, server didn't have it yet
+    if (!effectiveIsLiked && wasLiked) return Math.max(0, base - 1); // unliked locally, server still has it
+    return base;
+  }, [meta, post.likes, (post as any).likesCount, post.isLiked, effectiveIsLiked, hasHydrated]);
 
   // If server says liked but persisted store doesn't have it yet (e.g., first run after feature added),
   // promote server truth into persistence to avoid flipping after hydration
@@ -114,6 +129,22 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   const handleLike = useCallback(() => {
     (effectiveIsLiked ? unlikePost : likePost)(post.id);
   }, [post.id, effectiveIsLiked, unlikePost, likePost]);
+
+  // Seed centralized meta if missing (supports lists that don't go through home feed)
+  useEffect(() => {
+    if (!meta) {
+      try {
+        (usePostStore.getState().updatePostMeta as any)?.(post.id, {
+          likes: typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0,
+          isLiked: !!post.isLiked,
+          bookmarked: !!post.isBookmarked,
+          comments: typeof post.comments === 'number' ? post.comments : 0,
+        });
+      } catch {}
+    }
+  // Intentionally only run on mount / post identity change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
 
   const handleBookmark = useCallback(() => {
     bookmarkPost(post.id);
@@ -469,7 +500,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
           <Heart size={22} color={effectiveIsLiked ? Colors.dark.error : Colors.dark.text} fill={effectiveIsLiked ? Colors.dark.error : 'transparent'} />
-          <Text style={styles.actionText}>{post.likes}</Text>
+          <Text style={styles.actionText}>{effectiveLikes}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
           <MessageCircle size={22} color={Colors.dark.text} />
@@ -495,7 +526,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
           images={post.images}
           initialIndex={selectedImageIndex}
           postId={post.id}
-          likes={post.likes}
+          likes={effectiveLikes}
           comments={post.comments}
           isLiked={effectiveIsLiked}
           onClose={handleCloseFullScreen}

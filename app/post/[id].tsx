@@ -316,7 +316,7 @@ export default function PostDetailScreen() {
 
   const handleLike = () => {
     if (post) {
-      if (!post?.isLiked) {
+      if (!effectiveIsLiked) {
         likePost(post.id);
       } else {
         unlikePost(post.id);
@@ -350,6 +350,25 @@ export default function PostDetailScreen() {
   };
 
   // Determine if this post is a question to adjust UI copy (Answers vs Comments)
+  // Centralized like state for global sync
+  const meta = usePostStore(s => s.getPostMeta(id));
+  const effectiveIsLiked = meta ? meta.isLiked : !!post?.isLiked;
+  const effectiveLikes = meta ? meta.likes : (post?.likes || 0);
+
+  // Seed centralized meta if missing (e.g., deep link)
+  useEffect(() => {
+    if (post && !meta) {
+      try {
+        (usePostStore.getState().updatePostMeta as any)?.(post.id, {
+          likes: post.likes || 0,
+          isLiked: !!post.isLiked,
+          bookmarked: !!post.isBookmarked,
+          comments: post.comments || 0,
+        });
+      } catch {}
+    }
+  }, [post?.id]);
+
   const isQuestion = useMemo(() => {
     const t = (post as any)?.type?.toLowerCase?.();
     const st = (post as any)?.subtype?.toLowerCase?.();
@@ -536,10 +555,10 @@ export default function PostDetailScreen() {
               <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
                 <Heart 
                   size={22} 
-                  color={post.isLiked ? Colors.dark.error : Colors.dark.text} 
-                  fill={post.isLiked ? Colors.dark.error : 'transparent'} 
+                  color={effectiveIsLiked ? Colors.dark.error : Colors.dark.text} 
+                  fill={effectiveIsLiked ? Colors.dark.error : 'transparent'} 
                 />
-                <Text style={styles.actionText}>{post.likes}</Text>
+                <Text style={styles.actionText}>{effectiveLikes}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.actionButton}>
@@ -632,9 +651,9 @@ export default function PostDetailScreen() {
           images={post.images}
           initialIndex={selectedImageIndex}
           postId={post.id}
-          likes={post.likes}
+          likes={effectiveLikes}
           comments={post.comments}
-          isLiked={post.isLiked}
+          isLiked={effectiveIsLiked}
           onClose={handleCloseFullScreen}
           onLike={handleLike}
           onComment={() => {}}
