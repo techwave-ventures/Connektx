@@ -59,6 +59,7 @@ import Colors from '@/constants/colors';
 import PostCard from '@/components/home/PostCard';
 import CommunityEventsTab from '@/components/community/CommunityEventsTab';
 import type { Post as HomePost, User as HomeUser } from '@/types';
+import { usePostStore } from '@/store/post-store';
 
 // Map a community post shape to the main Home Post shape for UI consistency
 function mapCommunityToHomePost(rawPost: any, community: Community, currentUserId?: string, createdQuestionPostIds?: string[]): HomePost {
@@ -181,6 +182,35 @@ function mapCommunityToHomePost(rawPost: any, community: Community, currentUserI
 }
 
 export default function CommunityDetailScreen() {
+  // Global post meta and togglers for sync across the app
+  const postMeta = usePostStore(s => s.postMeta);
+  const likePostGlobal = usePostStore(s => s.likePost);
+  const unlikePostGlobal = usePostStore(s => s.unlikePost);
+  const updatePostMeta = usePostStore(s => s.updatePostMeta);
+
+  // Seed centralized meta for questions in this community tab so likes stay in sync
+  useEffect(() => {
+    try {
+      if (typeof getQuestionsAndAnswers === 'function' && activeTab === 'questions') {
+        const list = getQuestionsAndAnswers();
+        if (Array.isArray(list)) {
+          list.forEach((question: any) => {
+            const meta = postMeta[question.id];
+            if (!meta) {
+              const likesCount = typeof question?.likesCount === 'number' ? question.likesCount : (Array.isArray(question?.likes) ? question.likes.length : 0);
+              const likedByMe = (question as any).likedByCurrentUser || (Array.isArray(question?.likes) ? question.likes.includes(useAuthStore.getState().user?.id || '') : false);
+              updatePostMeta(question.id, {
+                likes: likesCount,
+                isLiked: !!likedByMe,
+                bookmarked: false,
+                comments: Array.isArray(question?.comments) ? question.comments.length : (typeof question?.commentsCount === 'number' ? question.commentsCount : 0),
+              });
+            }
+          });
+        }
+      }
+    } catch {}
+  }, [activeTab, communities?.length, Object.keys(postMeta).length]);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { 
@@ -1347,16 +1377,33 @@ export default function CommunityDetailScreen() {
                         style={styles.questionStatItem}
                         onPress={(e) => { 
                           e.stopPropagation(); // Prevent parent TouchableOpacity from firing
-                          if (token) likePost(token, question.id); 
+                          const meta = postMeta[question.id];
+                          const fallbackLiked = (question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false);
+                          const isLikedEff = meta ? meta.isLiked : !!fallbackLiked;
+                          if (isLikedEff) {
+                            unlikePostGlobal(question.id);
+                          } else {
+                            likePostGlobal(question.id);
+                          }
                         }}
                         activeOpacity={0.7}
                       >
-                        <Heart 
-                          size={16} 
-                          color={(question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false) ? Colors.dark.primary : Colors.dark.subtext}
-                          fill={(question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false) ? Colors.dark.primary : 'none'}
-                        />
-                        <Text style={styles.questionStatText}>{typeof (question as any).likesCount === 'number' ? (question as any).likesCount : question.likes?.length || 0}</Text>
+                        {(() => {
+                          const meta = postMeta[question.id];
+                          const fallbackLiked = (question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false);
+                          const isLikedEff = meta ? meta.isLiked : !!fallbackLiked;
+                          const likesEff = meta?.likes ?? (typeof (question as any).likesCount === 'number' ? (question as any).likesCount : (question.likes?.length || 0));
+                          return (
+                            <>
+                              <Heart 
+                                size={16} 
+                                color={isLikedEff ? Colors.dark.primary : Colors.dark.subtext}
+                                fill={isLikedEff ? Colors.dark.primary : 'none'}
+                              />
+                              <Text style={styles.questionStatText}>{likesEff}</Text>
+                            </>
+                          );
+                        })()}
                       </TouchableOpacity>
                       
                       <View style={styles.questionStatItem}>
@@ -1918,15 +1965,34 @@ export default function CommunityDetailScreen() {
                 <View style={styles.qaListItemFooter}>
                   <TouchableOpacity 
                     style={styles.qaListItemStat}
-                    onPress={() => { if (token) likePost(token, question.id); }}
+                    onPress={() => { 
+                      const meta = postMeta[question.id];
+                      const fallbackLiked = (question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false);
+                      const isLikedEff = meta ? meta.isLiked : !!fallbackLiked;
+                      if (isLikedEff) {
+                        unlikePostGlobal(question.id);
+                      } else {
+                        likePostGlobal(question.id);
+                      }
+                    }}
                     activeOpacity={0.7}
                   >
-                    <Heart 
-                      size={14} 
-                      color={(question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false) ? Colors.dark.primary : Colors.dark.subtext}
-                      fill={(question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false) ? Colors.dark.primary : 'none'}
-                    />
-                    <Text style={styles.qaListItemStatText}>{typeof (question as any).likesCount === 'number' ? (question as any).likesCount : question.likes.length}</Text>
+                    {(() => {
+                      const meta = postMeta[question.id];
+                      const fallbackLiked = (question as any).likedByCurrentUser || (question.likes?.includes(user?.id || '') ?? false);
+                      const isLikedEff = meta ? meta.isLiked : !!fallbackLiked;
+                      const likesEff = meta?.likes ?? (typeof (question as any).likesCount === 'number' ? (question as any).likesCount : question.likes.length);
+                      return (
+                        <>
+                          <Heart 
+                            size={14} 
+                            color={isLikedEff ? Colors.dark.primary : Colors.dark.subtext}
+                            fill={isLikedEff ? Colors.dark.primary : 'none'}
+                          />
+                          <Text style={styles.qaListItemStatText}>{likesEff}</Text>
+                        </>
+                      );
+                    })()}
                   </TouchableOpacity>
                   <View style={styles.qaListItemStat}>
                     <MessageSquare size={14} color={Colors.dark.subtext} />
