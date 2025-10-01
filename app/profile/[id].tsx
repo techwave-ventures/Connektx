@@ -573,14 +573,14 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
 
   const handleViewFollowers = () => {
     // Pass the profile user's ID so we show their followers, not the logged-in user's
-    const targetUserId = isOwnProfile ? undefined : profileUser?.id;
+    const targetUserId = isOwnProfile ? undefined : (profileUser?.id || displayUser?.id);
     const route = targetUserId ? `/profile/followers?userId=${targetUserId}` : '/profile/followers';
     router.push(route);
   };
 
   const handleViewFollowing = () => {
     // Pass the profile user's ID so we show their following, not the logged-in user's
-    const targetUserId = isOwnProfile ? undefined : profileUser?.id;
+    const targetUserId = isOwnProfile ? undefined : (profileUser?.id || displayUser?.id);
     const route = targetUserId ? `/profile/following?userId=${targetUserId}` : '/profile/following';
     router.push(route);
   };
@@ -961,7 +961,7 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
     }
   };
 
-  if (!profileUser) {
+  if (!displayUser) {
     return (
       <SafeAreaView style={styles.container}>
         <Stack.Screen
@@ -1012,37 +1012,37 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
     <>
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
-          <Avatar source={profileUser.avatar} name={profileUser.name} size={80} showBorder />
+          <Avatar source={displayUser?.avatar} name={displayUser?.name} size={80} showBorder />
         </View>
         <View style={styles.profileInfo}>
           <View style={styles.nameContainer}>
-            <Text style={styles.userName}>{profileUser.name}</Text>
+            <Text style={styles.userName}>{displayUser?.name}</Text>
             {isOwnProfile && (
               <TouchableOpacity onPress={handleEditProfile}>
                 <Edit2 size={16} color={Colors.dark.subtext} />
               </TouchableOpacity>
             )}
           </View>
-          <Text style={styles.userBio}>{profileUser.headline || "i'm on ConnektX"}</Text>
+          <Text style={styles.userBio}>{displayUser?.headline || "i'm on ConnektX"}</Text>
           <View style={styles.metadataContainer}>
-            {profileUser.location && (
+            {displayUser?.location && (
               <View style={styles.locationContainer}>
                 <MapPin size={14} color={Colors.dark.subtext} />
-                <Text style={styles.locationText}>{profileUser.location}</Text>
+                <Text style={styles.locationText}>{displayUser.location}</Text>
               </View>
             )}
-            {profileUser.joinedDate && (
+            {displayUser?.joinedDate && (
               <View style={styles.joinedContainer}>
                 <Calendar size={14} color={Colors.dark.subtext} />
-                <Text style={styles.joinedText}>Joined {profileUser.joinedDate}</Text>
+                <Text style={styles.joinedText}>Joined {displayUser.joinedDate}</Text>
               </View>
             )}
           </View>
         </View>
       </View>
-      {profileUser.socialLinks && profileUser.socialLinks.length > 0 && (
+      {displayUser?.socialLinks && displayUser.socialLinks.length > 0 && (
         <View style={styles.socialLinksContainer}>
-          {profileUser.socialLinks.map((link, index) => (
+          {displayUser.socialLinks.map((link, index) => (
             <TouchableOpacity key={index} style={styles.socialIconButton} onPress={() => {}}>
               {getSocialIcon(link.platform)}
             </TouchableOpacity>
@@ -1052,19 +1052,19 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
       <View style={styles.actionButtonsContainer}>
         <View style={styles.profileViewsCard}>
           <BarChart2 size={20} color={Colors.dark.text} />
-          <Text style={styles.profileViewsNumber}>{profileUser.profileViews}</Text>
+          <Text style={styles.profileViewsNumber}>{profileUser?.profileViews ?? displayUser?.profileViews ?? 0}</Text>
           <Text style={styles.profileViewsText}>Profile Views</Text>
         </View>
         <View style={styles.actionButtons}>
           {isOwnProfile ? (
             <View style={styles.followStatsContainer}>
               <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowers}>
-                <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
+                <Text style={styles.followStatNumber}>{profileUser?.followers ?? displayUser?.followers ?? 0}</Text>
                 <Text style={styles.followStatLabel}>Followers</Text>
               </TouchableOpacity>
               <View style={styles.followStatDivider} />
               <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowing}>
-                <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
+                <Text style={styles.followStatNumber}>{profileUser?.following ?? displayUser?.following ?? 0}</Text>
                 <Text style={styles.followStatLabel}>Following</Text>
               </TouchableOpacity>
             </View>
@@ -1072,22 +1072,22 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
             <View style={styles.otherUserContainer}>
               <View style={styles.otherUserFollowStats}>
                 <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowers}>
-                  <Text style={styles.followStatNumber}>{profileUser.followers || 0}</Text>
+                  <Text style={styles.followStatNumber}>{profileUser?.followers ?? displayUser?.followers ?? 0}</Text>
                   <Text style={styles.followStatLabel}>Followers</Text>
                 </TouchableOpacity>
                 <View style={styles.followStatDivider} />
                 <TouchableOpacity style={styles.otherUserStatButton} onPress={handleViewFollowing}>
-                  <Text style={styles.followStatNumber}>{profileUser.following || 0}</Text>
+                  <Text style={styles.followStatNumber}>{profileUser?.following ?? displayUser?.following ?? 0}</Text>
                   <Text style={styles.followStatLabel}>Following</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.otherUserActionButtons}>
                 <Button
-                  title={isFollowingUser(profileUser?.id || '') ? "Following" : "Follow"}
+                  title={isFollowingUser((profileUser?.id || displayUser?.id || '')) ? "Following" : "Follow"}
                   onPress={handleFollow}
                   style={styles.otherUserFollowButton}
-                  variant={isFollowingUser(profileUser?.id || '') ? "outline" : "primary"}
-                  gradient={!isFollowingUser(profileUser?.id || '')}
+                  variant={isFollowingUser((profileUser?.id || displayUser?.id || '')) ? "outline" : "primary"}
+                  gradient={!isFollowingUser((profileUser?.id || displayUser?.id || ''))}
                   disabled={isLoading}
                   size="small"
                   textStyle={{ fontSize: 14 }}

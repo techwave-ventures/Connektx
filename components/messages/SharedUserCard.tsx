@@ -7,8 +7,8 @@ import {
   Animated,
   Pressable 
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { pushProfile } from '@/utils/nav';
 import { User, ArrowRight, MapPin, Briefcase } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/ui/Avatar';
@@ -28,7 +28,6 @@ interface SharedUserCardProps {
 }
 
 const SharedUserCard: React.FC<SharedUserCardProps> = ({ user }) => {
-  const router = useRouter();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   if (!user) {
@@ -54,7 +53,13 @@ const SharedUserCard: React.FC<SharedUserCardProps> = ({ user }) => {
   };
 
   const handlePress = () => {
-    router.push(`/profile/${user._id}`);
+    pushProfile({
+      id: user._id,
+      name: user.name,
+      avatar: user.avatar ?? undefined,
+      headline: user.headline ?? undefined,
+      bio: user.bio ?? undefined,
+    });
   };
 
   return (

@@ -35,6 +35,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useLikeStore } from '@/store/like-store';
 import Colors from '@/constants/colors';
 import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet'; // --- SOLUTION 1: Import the ShareBottomSheet
+import { pushProfile } from '@/utils/nav';
 
 const { width } = Dimensions.get('window');
 
@@ -191,10 +192,13 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
 
   
   const handleViewProfile = () => {
-    // Pass user data to avoid loading screen
-    router.push({
-      pathname: `/profile/${post.author.id}` as any,
-      params: { userData: JSON.stringify({ id: post.author.id, name: post.author.name, avatar: post.author.avatar, bio: post.author.bio || post.author.headline }) }
+    // Use centralized helper to pass preview data and navigate
+    pushProfile({
+      id: post.author.id,
+      name: post.author.name,
+      avatar: post.author.avatar,
+      // Keep existing behavior using bio or headline for the preview
+      bio: (post.author as any).bio || (post.author as any).headline || ''
     });
   };
 

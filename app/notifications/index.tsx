@@ -21,6 +21,7 @@ import {
 import Avatar from '@/components/ui/Avatar';
 import Colors from '@/constants/colors';
 import { useNotificationStore, Notification } from '@/store/notification-store';
+import { pushProfile } from '@/utils/nav';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -115,7 +116,18 @@ export default function NotificationsScreen() {
             
           console.log('👤 Navigating to profile:', senderId);
           if (senderId) {
-            router.push(`/profile/${senderId}`);
+            // If we have sender object details, use helper to pass preview data; otherwise fallback to id-only push
+            if (typeof notification.sender === 'object' && notification.sender) {
+              pushProfile({
+                id: notification.sender._id,
+                name: notification.sender.name || 'User',
+                avatar: notification.sender.profileImage || '',
+                headline: (notification.sender as any).headline || '',
+                bio: (notification.sender as any).bio || ''
+              });
+            } else {
+              pushProfile({ id: senderId, name: 'User' });
+            }
           } else {
             console.warn('⚠️ No valid senderId found for follow notification');
             console.warn('⚠️ Sender structure:', notification.sender);

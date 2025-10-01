@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth-store';
 import Colors from '@/constants/colors';
 import { User } from '@/types';
 import { getUserFollowers, getUserFollowing, enrichUserList, followUser, unfollowUser } from '@/api/user';
+import { pushProfile } from '@/utils/nav';
 
 export default function FollowersScreen() {
   const router = useRouter();
@@ -152,8 +153,15 @@ export default function FollowersScreen() {
     router.back();
   };
 
-  const handleViewProfile = (userId: string) => {
-    router.push(`/profile/${userId}`);
+  const handleViewProfile = (u: User) => {
+    if (!u) return;
+    pushProfile({
+      id: (u as any).id || (u as any)._id,
+      name: u.name,
+      avatar: (u as any).avatar || (u as any).profileImage || '',
+      headline: (u as any).headline || '',
+      bio: (u as any).bio || ''
+    });
   };
 
   const handleToggleFollow = async (userId: string) => {
@@ -236,7 +244,7 @@ export default function FollowersScreen() {
   const renderFollowerItem = ({ item }: { item: User }) => (
     <TouchableOpacity 
       style={styles.followerItem}
-      onPress={() => handleViewProfile(item.id)}
+      onPress={() => handleViewProfile(item)}
     >
       <Avatar 
         source={item.avatar} 

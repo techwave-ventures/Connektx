@@ -18,6 +18,7 @@ import PostCard from '@/components/home/PostCard';
 import Avatar from '@/components/ui/Avatar';
 import Colors from '@/constants/colors';
 import { Post, User } from '@/types';
+import { pushProfile } from '@/utils/nav';
 import { useSearchStore } from '@/store/search-store';
 
 export default function SearchScreen() {
@@ -89,7 +90,13 @@ export default function SearchScreen() {
     router.back();
   };
 
-  const handleViewProfile = (userId : string) => router.push(`/profile/${userId}`);
+  const handleViewProfile = (u: User) => pushProfile({
+    id: (u as any)._id,
+    name: u.name,
+    avatar: (u as any).profileImage || (u as any).avatar || '',
+    headline: (u as any).headline || '',
+    bio: (u as any).bio || ''
+  });
 
   const handlePostPress = (postId: string) => {
     router.push(`/post/${postId}`);
@@ -98,7 +105,7 @@ export default function SearchScreen() {
   const renderPersonItem = ({ item }: { item: User }) => {
     if (!item) return null; // Prevent crashing
     return (
-      <TouchableOpacity style={styles.personItem} onPress={() => handleViewProfile(item._id)}>
+      <TouchableOpacity style={styles.personItem} onPress={() => handleViewProfile(item)}>
         <Avatar source={item?.profileImage || ''} size={50} />
         <View style={styles.personInfo}>
           <Text style={styles.personName}>{item.name}</Text>

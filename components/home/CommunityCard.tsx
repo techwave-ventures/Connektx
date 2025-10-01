@@ -37,6 +37,7 @@ import Colors from '@/constants/colors';
 import { ShareBottomSheet } from '@/components/ui/ShareBottomSheet';
 import { enrichCommunityPost, getCommunityById } from '@/utils/enrichCommunityPosts';
 import { useLikeStore } from '@/store/like-store';
+import { pushProfile } from '@/utils/nav';
 
 const DEBUG = (typeof __DEV__ !== 'undefined' && __DEV__) && (typeof process !== 'undefined' && process.env?.LOG_LEVEL === 'verbose');
 
@@ -207,14 +208,11 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
   };
 
   const handleViewUserProfile = () => {
-    router.push({
-      pathname: `/profile/${post.author.id}`,
-      params: { userData: JSON.stringify({ 
-        id: post.author.id, 
-        name: post.author.name, 
-        avatar: post.author.avatar, 
-        bio: post.author.bio || post.author.headline 
-      }) }
+    pushProfile({
+      id: post.author.id,
+      name: post.author.name,
+      avatar: post.author.avatar,
+      bio: (post.author as any).bio || (post.author as any).headline || ''
     });
   };
 

@@ -8,7 +8,8 @@
     "start-web": "expo start --web --tunnel",
     "start-web-dev": "DEBUG=expo* expo start --web --tunnel",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "lint-profile-nav": "node scripts/lint-profile-nav.mjs"
   },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "^3.0.4",

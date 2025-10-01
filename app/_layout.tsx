@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import Colors from '@/constants/colors';
+import { pushProfile } from '@/utils/nav';
 
 import { ErrorBoundary } from "./error-boundary";
 import { QueryProvider } from '@/providers/QueryProvider';
@@ -104,7 +105,8 @@ function useNotificationObserver() {
 
       // Navigate based on the data payload
       if (data.notificationType === 'follow' && data.senderId) {
-        router.push(`/profile/${data.senderId}`);
+        // Use centralized helper for instant header; minimal preview
+        pushProfile({ id: data.senderId, name: 'User' });
       } else if (data.postId) {
         router.push(`/post/${data.postId}`);
       }
