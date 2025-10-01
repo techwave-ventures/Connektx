@@ -44,7 +44,14 @@ import CommunityCard from '@/components/home/CommunityCard';
 import ShowcaseCard from '@/components/showcase/ShowcaseCard';
 import PortfolioGrid from '@/components/portfolio/PortfolioGrid';
 import Avatar from '@/components/ui/Avatar';
-import { ProfileHeaderSkeleton, ProfileContentSkeleton } from '@/components/ui/SkeletonLoader';
+import { 
+  ProfileHeaderSkeleton, 
+  ProfileContentSkeleton, 
+  RepliesLoadingSkeleton,
+  ShowcaseLoadingSkeleton,
+  PortfolioGridLoadingSkeleton,
+  SkeletonLoader 
+} from '@/components/ui/SkeletonLoader';
 import { useAuthStore } from '@/store/auth-store';
 import { useShowcaseStore } from '@/store/showcase-store';
 import { Post, ShowcaseEntry, User as UserType } from '@/types';
@@ -436,6 +443,22 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
   // If we have initial data but hook hasn't loaded yet, show initial data
   const displayUser = profileUser || initialUserData;
   const [expanded, setExpanded] = useState(false);
+  
+  // Better skeleton detection - only show skeleton for specific missing data
+  // Don't show skeleton if we have basic display data (from route params)
+  const shouldShowBasicSkeleton = loading && !profileUser && !displayUser;
+  const shouldShowDataSkeleton = loading && !profileUser; // For data that requires fresh API call
+  
+  if (DEBUG) {
+    console.log('🎭 Skeleton state:', {
+      loading,
+      hasProfileUser: !!profileUser,
+      hasDisplayUser: !!displayUser,
+      hasInitialData: !!initialUserData,
+      shouldShowBasicSkeleton,
+      shouldShowDataSkeleton
+    });
+  }
 
   // Optimized focus effect - only use smart refresh
   useFocusEffect(
@@ -838,20 +861,26 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
       case 'portfolio':
         return (
           <View style={styles.tabContent}>
-            <PortfolioGrid
-              items={userPortfolioItems}
-              onItemPress={handlePortfolioItemPress}
-              onCreatePress={() => router.push('/portfolio/create')}
-              onEditItem={handleEditPortfolioItem}
-              onDeleteItem={handleDeletePortfolioItem}
-              showActions={!!isOwnProfile}
-            />
+            {shouldShowDataSkeleton && userPortfolioItems.length === 0 ? (
+              <PortfolioGridLoadingSkeleton count={6} />
+            ) : (
+              <PortfolioGrid
+                items={userPortfolioItems}
+                onItemPress={handlePortfolioItemPress}
+                onCreatePress={() => router.push('/portfolio/create')}
+                onEditItem={handleEditPortfolioItem}
+                onDeleteItem={handleDeletePortfolioItem}
+                showActions={!!isOwnProfile}
+              />
+            )}
           </View>
         );
       case 'ideas':
         return (
           <View style={styles.tabContent}>
-            {userShowcases.length > 0 ? (
+            {shouldShowDataSkeleton && userShowcases.length === 0 ? (
+              <ShowcaseLoadingSkeleton count={3} />
+            ) : userShowcases.length > 0 ? (
               userShowcases.map(showcase =>
                 <ShowcaseCard
                   key={showcase.id}
@@ -880,7 +909,13 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
       case 'posts':
         return (
           <View style={styles.tabContent}>
-            {userPosts.length > 0 ? (
+            {shouldShowDataSkeleton && userPosts.length === 0 ? (
+              <View>
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <PostCardSkeleton key={index} showImages={Math.random() > 0.6} />
+                ))}
+              </View>
+            ) : userPosts.length > 0 ? (
               userPosts.map(post => (
                 <PostCard
                   key={post.id}
@@ -908,9 +943,7 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
         return (
           <View style={styles.repliesTabContent}>
             {commentsLoading ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading replies...</Text>
-              </View>
+              <RepliesLoadingSkeleton count={6} />
             ) : userComments.length > 0 ? (
               <View style={styles.repliesContainer}>
                 {userComments.map((comment) => (
@@ -961,7 +994,8 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
     }
   };
 
-  if (!displayUser) {
+  // Only show "Profile not found" if we've finished loading and have no user data at all
+  if (!loading && !displayUser && !profileUser) {
     return (
       <SafeAreaView style={styles.container}>
         <Stack.Screen
@@ -984,7 +1018,7 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
           }}
         />
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading profile...</Text>
+          <Text style={styles.loadingText}>Profile not found.</Text>
         </View>
       </SafeAreaView>
     );
@@ -1012,32 +1046,51 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
     <>
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
-          <Avatar source={displayUser?.avatar} name={displayUser?.name} size={80} showBorder />
+          {!displayUser?.name ? (
+            <SkeletonLoader width={80} height={80} borderRadius={40} />
+          ) : (
+            <Avatar source={displayUser?.avatar} name={displayUser?.name} size={80} showBorder />
+          )}
         </View>
         <View style={styles.profileInfo}>
           <View style={styles.nameContainer}>
-            <Text style={styles.userName}>{displayUser?.name}</Text>
-            {isOwnProfile && (
-              <TouchableOpacity onPress={handleEditProfile}>
-                <Edit2 size={16} color={Colors.dark.subtext} />
-              </TouchableOpacity>
+            {!displayUser?.name ? (
+              <SkeletonLoader width={150} height={18} style={{ marginBottom: 6 }} />
+            ) : (
+              <>
+                <Text style={styles.userName}>{displayUser.name}</Text>
+                {isOwnProfile && (
+                  <TouchableOpacity onPress={handleEditProfile}>
+                    <Edit2 size={16} color={Colors.dark.subtext} />
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
-          <Text style={styles.userBio}>{displayUser?.headline || "i'm on ConnektX"}</Text>
-          <View style={styles.metadataContainer}>
-            {displayUser?.location && (
-              <View style={styles.locationContainer}>
-                <MapPin size={14} color={Colors.dark.subtext} />
-                <Text style={styles.locationText}>{displayUser.location}</Text>
+          {shouldShowBasicSkeleton ? (
+            <>
+              <SkeletonLoader width={200} height={14} style={{ marginBottom: 8 }} />
+              <SkeletonLoader width={120} height={12} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.userBio}>{displayUser?.headline || "i'm on ConnektX"}</Text>
+              <View style={styles.metadataContainer}>
+                {displayUser?.location && (
+                  <View style={styles.locationContainer}>
+                    <MapPin size={14} color={Colors.dark.subtext} />
+                    <Text style={styles.locationText}>{displayUser.location}</Text>
+                  </View>
+                )}
+                {displayUser?.joinedDate && (
+                  <View style={styles.joinedContainer}>
+                    <Calendar size={14} color={Colors.dark.subtext} />
+                    <Text style={styles.joinedText}>Joined {displayUser.joinedDate}</Text>
+                  </View>
+                )}
               </View>
-            )}
-            {displayUser?.joinedDate && (
-              <View style={styles.joinedContainer}>
-                <Calendar size={14} color={Colors.dark.subtext} />
-                <Text style={styles.joinedText}>Joined {displayUser.joinedDate}</Text>
-              </View>
-            )}
-          </View>
+            </>
+          )}
         </View>
       </View>
       {displayUser?.socialLinks && displayUser.socialLinks.length > 0 && (
@@ -1051,12 +1104,24 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
       )}
       <View style={styles.actionButtonsContainer}>
         <View style={styles.profileViewsCard}>
-          <BarChart2 size={20} color={Colors.dark.text} />
-          <Text style={styles.profileViewsNumber}>{profileUser?.profileViews ?? displayUser?.profileViews ?? 0}</Text>
-          <Text style={styles.profileViewsText}>Profile Views</Text>
+          {shouldShowDataSkeleton && (!profileUser?.profileViews && !displayUser?.profileViews) ? (
+            <>
+              <SkeletonLoader width={20} height={20} borderRadius={10} style={{ marginBottom: 4 }} />
+              <SkeletonLoader width={30} height={18} style={{ marginBottom: 4 }} />
+              <SkeletonLoader width={60} height={12} />
+            </>
+          ) : (
+            <>
+              <BarChart2 size={20} color={Colors.dark.text} />
+              <Text style={styles.profileViewsNumber}>{profileUser?.profileViews ?? displayUser?.profileViews ?? 0}</Text>
+              <Text style={styles.profileViewsText}>Profile Views</Text>
+            </>
+          )}
         </View>
         <View style={styles.actionButtons}>
-          {isOwnProfile ? (
+          {shouldShowDataSkeleton && (!profileUser?.followers && !displayUser?.followers) ? (
+            <SkeletonLoader width="100%" height={44} borderRadius={12} />
+          ) : isOwnProfile ? (
             <View style={styles.followStatsContainer}>
               <TouchableOpacity style={styles.followStatButton} onPress={handleViewFollowers}>
                 <Text style={styles.followStatNumber}>{profileUser?.followers ?? displayUser?.followers ?? 0}</Text>
@@ -1105,13 +1170,27 @@ if (DEBUG) console.log('🏠 isOwnProfile result:', isOwnProfile);
           )}
         </View>
       </View>
-      <TabBar
-        tabs={[{ id: 'about', label: 'About' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'ideas', label: 'Ideas' }]}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        scrollable
-        style={styles.tabBar}
-      />
+      {shouldShowBasicSkeleton ? (
+        <View style={styles.tabBarSkeleton}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <SkeletonLoader 
+              key={index} 
+              width={60} 
+              height={32} 
+              borderRadius={16} 
+              style={{ marginRight: 12 }} 
+            />
+          ))}
+        </View>
+      ) : (
+        <TabBar
+          tabs={[{ id: 'about', label: 'About' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'ideas', label: 'Ideas' }]}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          scrollable
+          style={styles.tabBar}
+        />
+      )}
     </>
   );
 
@@ -1298,6 +1377,13 @@ const styles = StyleSheet.create({
     maxHeight: 36
   },
   tabBar: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.dark.border },
+  tabBarSkeleton: { 
+    flexDirection: 'row', 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderBottomWidth: 1, 
+    borderBottomColor: Colors.dark.border 
+  },
   tabContent: { padding: 16 },
   aboutSection: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },

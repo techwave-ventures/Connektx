@@ -33,7 +33,15 @@ import PostCard from '@/components/home/PostCard';
 import CommunityCard from '@/components/home/CommunityCard';
 import ShowcaseCard from '@/components/showcase/ShowcaseCard';
 import PortfolioGrid from '@/components/portfolio/PortfolioGrid';
-import { ProfileHeaderSkeleton, ProfileContentSkeleton, PostCardSkeleton } from '@/components/ui/SkeletonLoader';
+import { 
+  ProfileHeaderSkeleton, 
+  ProfileContentSkeleton, 
+  PostCardSkeleton, 
+  RepliesLoadingSkeleton,
+  ShowcaseLoadingSkeleton,
+  PortfolioGridLoadingSkeleton,
+  SkeletonLoader 
+} from '@/components/ui/SkeletonLoader';
 import Colors from '@/constants/colors';
 import Avatar from '@/components/ui/Avatar';
 import useProfileData from '@/hooks/useProfileData';
@@ -171,8 +179,8 @@ export default function ProfileScreen() {
       ]
     );
   };
-  // Show loading skeleton while data is loading
-  if (loading && !displayUser) {
+  // Only show login prompt if we've finished loading and have no user data at all
+  if (!loading && !displayUser) {
     return (
       <SafeAreaView style={styles.container}>
         <Stack.Screen
@@ -185,15 +193,6 @@ export default function ProfileScreen() {
             headerShadowVisible: false,
           }}
         />
-        <ProfileHeaderSkeleton />
-        <ProfileContentSkeleton activeTab={activeTab} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!displayUser) {
-    return (
-      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Please log in to view your profile.</Text>
         </View>
@@ -348,35 +347,39 @@ export default function ProfileScreen() {
       case 'portfolio':
         return (
           <View style={styles.tabContent}>
-            <PortfolioGrid
-              items={userPortfolioItems}
-              onItemPress={(item) => {
-                // Open the portfolio link
-                if (item.links && item.links.length > 0 && item.links[0].url) {
-                  const url = item.links[0].url;
-                  // Check if URL has protocol, if not add https://
-                  const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
-                  
-                  import('expo-linking').then(({ openURL }) => {
-                    openURL(formattedUrl).catch(() => {
-                      Alert.alert('Error', 'Could not open the portfolio link');
+            {loading && !displayUser && userPortfolioItems.length === 0 ? (
+              <PortfolioGridLoadingSkeleton count={6} />
+            ) : (
+              <PortfolioGrid
+                items={userPortfolioItems}
+                onItemPress={(item) => {
+                  // Open the portfolio link
+                  if (item.links && item.links.length > 0 && item.links[0].url) {
+                    const url = item.links[0].url;
+                    // Check if URL has protocol, if not add https://
+                    const formattedUrl = url.startsWith('http') ? url : `https://${url}`;
+                    
+                    import('expo-linking').then(({ openURL }) => {
+                      openURL(formattedUrl).catch(() => {
+                        Alert.alert('Error', 'Could not open the portfolio link');
+                      });
                     });
-                  });
-                } else {
-                  Alert.alert('No Link', 'This portfolio item does not have a link');
-                }
-              }}
-              onCreatePress={() => router.push('/portfolio/create')}
-              onEditItem={(item) => router.push({ pathname: '/portfolio/create', params: { editItem: JSON.stringify(item) } })}
-              onDeleteItem={async (item) => {
-                if (token) {
-                  const success = await deletePortfolioItem(token, item.id);
-                  if (!success) {
-                    Alert.alert('Error', 'Failed to delete portfolio item');
+                  } else {
+                    Alert.alert('No Link', 'This portfolio item does not have a link');
                   }
-                }
-              }}
-            />
+                }}
+                onCreatePress={() => router.push('/portfolio/create')}
+                onEditItem={(item) => router.push({ pathname: '/portfolio/create', params: { editItem: JSON.stringify(item) } })}
+                onDeleteItem={async (item) => {
+                  if (token) {
+                    const success = await deletePortfolioItem(token, item.id);
+                    if (!success) {
+                      Alert.alert('Error', 'Failed to delete portfolio item');
+                    }
+                  }
+                }}
+              />
+            )}
           </View>
         );
       case 'ideas':
@@ -384,7 +387,9 @@ export default function ProfileScreen() {
         
         return (
             <View style={styles.tabContent}>
-                {showcasesToShow.length > 0 ? (
+                {loading && !displayUser && showcasesToShow.length === 0 ? (
+                    <ShowcaseLoadingSkeleton count={3} />
+                ) : showcasesToShow.length > 0 ? (
                     showcasesToShow.map(showcase =>
                         <ShowcaseCard 
                           key={showcase.id} 
@@ -402,7 +407,13 @@ export default function ProfileScreen() {
       case 'posts':
         return (
           <View style={styles.tabContent}>
-            {userPosts.length > 0 ? (
+            {loading && !displayUser && userPosts.length === 0 ? (
+              <View>
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <PostCardSkeleton key={index} showImages={Math.random() > 0.6} />
+                ))}
+              </View>
+            ) : userPosts.length > 0 ? (
               <FlatList
                 data={userPosts}
                 keyExtractor={(item) => item.id}
@@ -432,9 +443,7 @@ export default function ProfileScreen() {
           return (
               <View style={styles.repliesTabContent}>
                   {commentsLoading ? (
-                      <View style={styles.loadingContainer}>
-                          <Text style={styles.loadingText}>Loading replies...</Text>
-                      </View>
+                      <RepliesLoadingSkeleton count={6} />
                   ) : userComments.length > 0 ? (
                       <View style={styles.repliesContainer}>
                           {userComments.map((comment) => (
@@ -470,47 +479,94 @@ export default function ProfileScreen() {
     <>
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
-          <Avatar source={displayUser.profileImage} name={displayUser.name} size={80} showBorder />
+          {!displayUser ? (
+            <SkeletonLoader width={80} height={80} borderRadius={40} />
+          ) : (
+            <Avatar source={displayUser.profileImage} name={displayUser.name} size={80} showBorder />
+          )}
         </View>
         <View style={styles.profileInfo}>
           <View style={styles.nameContainer}>
-            <Text style={styles.userName}>{displayUser.name}</Text>
-            <TouchableOpacity onPress={handleEditProfile}><Edit2 size={16} color={Colors.dark.subtext} /></TouchableOpacity>
+            {!displayUser ? (
+              <SkeletonLoader width={150} height={18} style={{ marginBottom: 6 }} />
+            ) : (
+              <>
+                <Text style={styles.userName}>{displayUser.name}</Text>
+                <TouchableOpacity onPress={handleEditProfile}><Edit2 size={16} color={Colors.dark.subtext} /></TouchableOpacity>
+              </>
+            )}
           </View>
-          <Text style={styles.userBio}>{displayUser.headline || "Add a headline to your profile!"}</Text>
-          <View style={styles.metadataContainer}>
-            {displayUser.location && <View style={styles.locationContainer}><MapPin size={14} color={Colors.dark.subtext} /><Text style={styles.locationText}>{displayUser.location}</Text></View>}
-            {displayUser.joinedDate && <View style={styles.joinedContainer}><Calendar size={14} color={Colors.dark.subtext} /><Text style={styles.joinedText}>Joined {new Date(displayUser.joinedDate).toLocaleDateString()}</Text></View>}
-          </View>
+          {!displayUser ? (
+            <>
+              <SkeletonLoader width={200} height={14} style={{ marginBottom: 8 }} />
+              <SkeletonLoader width={120} height={12} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.userBio}>{displayUser.headline || "Add a headline to your profile!"}</Text>
+              <View style={styles.metadataContainer}>
+                {displayUser.location && <View style={styles.locationContainer}><MapPin size={14} color={Colors.dark.subtext} /><Text style={styles.locationText}>{displayUser.location}</Text></View>}
+                {displayUser.joinedDate && <View style={styles.joinedContainer}><Calendar size={14} color={Colors.dark.subtext} /><Text style={styles.joinedText}>Joined {new Date(displayUser.joinedDate).toLocaleDateString()}</Text></View>}
+              </View>
+            </>
+          )}
         </View>
       </View>
       <View style={styles.actionButtonsContainer}>
         <View style={styles.profileViewsCard}>
-          <BarChart2 size={20} color={Colors.dark.text} />
-          <Text style={styles.profileViewsNumber}>{displayUser.profileViews || 0}</Text>
-          <Text style={styles.profileViewsText}>Profile Views</Text>
+          {!displayUser ? (
+            <>
+              <SkeletonLoader width={20} height={20} borderRadius={10} style={{ marginBottom: 4 }} />
+              <SkeletonLoader width={30} height={18} style={{ marginBottom: 4 }} />
+              <SkeletonLoader width={60} height={12} />
+            </>
+          ) : (
+            <>
+              <BarChart2 size={20} color={Colors.dark.text} />
+              <Text style={styles.profileViewsNumber}>{displayUser.profileViews || 0}</Text>
+              <Text style={styles.profileViewsText}>Profile Views</Text>
+            </>
+          )}
         </View>
         <View style={styles.actionButtons}>
-          <View style={styles.followStatsContainer}>
-            <TouchableOpacity style={styles.followStatButton} onPress={() => router.push('/profile/followers')}>
-              <Text style={styles.followStatNumber}>{displayUser.followers || 0}</Text>
-              <Text style={styles.followStatLabel}>Followers</Text>
-            </TouchableOpacity>
-            <View style={styles.followStatDivider} />
-            <TouchableOpacity style={styles.followStatButton} onPress={() => router.push('/profile/following')}>
-              <Text style={styles.followStatNumber}>{displayUser.following || 0}</Text>
-              <Text style={styles.followStatLabel}>Following</Text>
-            </TouchableOpacity>
-          </View>
+          {!displayUser ? (
+            <SkeletonLoader width="100%" height={44} borderRadius={12} />
+          ) : (
+            <View style={styles.followStatsContainer}>
+              <TouchableOpacity style={styles.followStatButton} onPress={() => router.push('/profile/followers')}>
+                <Text style={styles.followStatNumber}>{displayUser.followers || 0}</Text>
+                <Text style={styles.followStatLabel}>Followers</Text>
+              </TouchableOpacity>
+              <View style={styles.followStatDivider} />
+              <TouchableOpacity style={styles.followStatButton} onPress={() => router.push('/profile/following')}>
+                <Text style={styles.followStatNumber}>{displayUser.following || 0}</Text>
+                <Text style={styles.followStatLabel}>Following</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
-      <TabBar
-        tabs={[{ id: 'about', label: 'About' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'ideas', label: 'Ideas' }]}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        scrollable
-        style={styles.tabBar}
-      />
+      {!displayUser ? (
+        <View style={styles.tabBarSkeleton}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <SkeletonLoader 
+              key={index} 
+              width={60} 
+              height={32} 
+              borderRadius={16} 
+              style={{ marginRight: 12 }} 
+            />
+          ))}
+        </View>
+      ) : (
+        <TabBar
+          tabs={[{ id: 'about', label: 'About' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'posts', label: 'Posts' }, { id: 'replies', label: 'Replies' }, { id: 'ideas', label: 'Ideas' }]}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          scrollable
+          style={styles.tabBar}
+        />
+      )}
     </>
   );
 
@@ -614,6 +670,13 @@ const styles = StyleSheet.create({
   followStatNumber: { color: Colors.dark.text, fontSize: 16, fontWeight: 'bold' },
   followStatLabel: { color: Colors.dark.subtext, fontSize: 12, marginTop: 2 },
   tabBar: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.dark.border },
+  tabBarSkeleton: { 
+    flexDirection: 'row', 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderBottomWidth: 1, 
+    borderBottomColor: Colors.dark.border 
+  },
   tabContent: { padding: 16 },
   aboutSection: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },

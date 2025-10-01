@@ -301,6 +301,93 @@ const styles = StyleSheet.create({
     width: '48%',
     marginBottom: 16,
   },
+  // UserReply skeleton styles
+  userReplySkeleton: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  replyHeaderSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  replyAvatarSkeleton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  replyHeaderText: {
+    flex: 1,
+    marginRight: 8,
+  },
+  replyContentSkeleton: {
+    marginBottom: 8,
+  },
+  replyPostPreviewSkeleton: {
+    backgroundColor: Colors.dark.background,
+    borderRadius: 8,
+    padding: 8,
+  },
+  repliesLoadingSkeleton: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
+  // Showcase skeleton styles
+  showcaseCardSkeleton: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  showcaseHeaderSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  showcaseAvatarSkeleton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  showcaseHeaderText: {
+    flex: 1,
+  },
+  showcaseContentSkeleton: {
+    marginBottom: 12,
+  },
+  showcaseImageSkeleton: {
+    marginBottom: 12,
+  },
+  showcaseActionsSkeleton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  showcaseLoadingSkeleton: {
+    padding: 16,
+  },
+  // Portfolio skeleton styles
+  portfolioItemSkeletonCard: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 12,
+    padding: 12,
+    width: '48%',
+    marginBottom: 16,
+  },
+  portfolioTagsSkeleton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  portfolioGridLoadingSkeleton: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
 });
 
 // Profile-specific skeleton components
@@ -398,6 +485,108 @@ export const ProfileFullSkeleton: React.FC = () => {
     <View style={styles.profileFullSkeleton}>
       <ProfileHeaderSkeleton />
       <ProfileContentSkeleton />
+    </View>
+  );
+};
+
+// UserReply skeleton component
+export const UserReplySkeleton: React.FC = () => {
+  return (
+    <View style={styles.userReplySkeleton}>
+      <View style={styles.replyHeaderSkeleton}>
+        <View style={[styles.skeleton, styles.replyAvatarSkeleton]} />
+        <View style={styles.replyHeaderText}>
+          <SkeletonLoader width={100} height={14} style={{ marginBottom: 4 }} />
+          <SkeletonLoader width={80} height={12} />
+        </View>
+        <SkeletonLoader width={60} height={12} />
+      </View>
+      <View style={styles.replyContentSkeleton}>
+        <SkeletonLoader width="100%" height={16} style={{ marginBottom: 6 }} />
+        <SkeletonLoader width="75%" height={16} style={{ marginBottom: 8 }} />
+      </View>
+      <View style={styles.replyPostPreviewSkeleton}>
+        <SkeletonLoader width={120} height={12} style={{ marginBottom: 6 }} />
+        <SkeletonLoader width="90%" height={14} style={{ marginBottom: 4 }} />
+        <SkeletonLoader width="65%" height={14} />
+      </View>
+    </View>
+  );
+};
+
+// Multiple reply skeletons for loading state
+export const RepliesLoadingSkeleton: React.FC<{ count?: number }> = ({ count = 5 }) => {
+  return (
+    <View style={styles.repliesLoadingSkeleton}>
+      {Array.from({ length: count }).map((_, index) => (
+        <UserReplySkeleton key={index} />
+      ))}
+    </View>
+  );
+};
+
+// Showcase card skeleton
+export const ShowcaseCardSkeleton: React.FC = () => {
+  return (
+    <View style={styles.showcaseCardSkeleton}>
+      <View style={styles.showcaseHeaderSkeleton}>
+        <View style={[styles.skeleton, styles.showcaseAvatarSkeleton]} />
+        <View style={styles.showcaseHeaderText}>
+          <SkeletonLoader width={120} height={16} style={{ marginBottom: 4 }} />
+          <SkeletonLoader width={80} height={12} />
+        </View>
+      </View>
+      <View style={styles.showcaseContentSkeleton}>
+        <SkeletonLoader width={150} height={20} style={{ marginBottom: 8 }} />
+        <SkeletonLoader width="100%" height={16} style={{ marginBottom: 6 }} />
+        <SkeletonLoader width="85%" height={16} style={{ marginBottom: 6 }} />
+        <SkeletonLoader width="60%" height={16} style={{ marginBottom: 12 }} />
+      </View>
+      <View style={styles.showcaseImageSkeleton}>
+        <SkeletonLoader width="100%" height={180} borderRadius={12} />
+      </View>
+      <View style={styles.showcaseActionsSkeleton}>
+        <SkeletonLoader width={60} height={32} borderRadius={16} />
+        <SkeletonLoader width={60} height={32} borderRadius={16} />
+        <SkeletonLoader width={60} height={32} borderRadius={16} />
+      </View>
+    </View>
+  );
+};
+
+// Portfolio item skeleton
+export const PortfolioItemSkeleton: React.FC = () => {
+  return (
+    <View style={styles.portfolioItemSkeletonCard}>
+      <SkeletonLoader width="100%" height={120} borderRadius={12} style={{ marginBottom: 8 }} />
+      <SkeletonLoader width="90%" height={16} style={{ marginBottom: 4 }} />
+      <SkeletonLoader width="70%" height={14} style={{ marginBottom: 6 }} />
+      <View style={styles.portfolioTagsSkeleton}>
+        <SkeletonLoader width={40} height={20} borderRadius={10} style={{ marginRight: 6 }} />
+        <SkeletonLoader width={50} height={20} borderRadius={10} />
+      </View>
+    </View>
+  );
+};
+
+// Multiple showcase skeletons
+export const ShowcaseLoadingSkeleton: React.FC<{ count?: number }> = ({ count = 3 }) => {
+  return (
+    <View style={styles.showcaseLoadingSkeleton}>
+      {Array.from({ length: count }).map((_, index) => (
+        <ShowcaseCardSkeleton key={index} />
+      ))}
+    </View>
+  );
+};
+
+// Portfolio grid skeleton
+export const PortfolioGridLoadingSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
+  return (
+    <View style={styles.portfolioGridLoadingSkeleton}>
+      {Array.from({ length: count }).map((_, index) => (
+        <PortfolioItemSkeleton key={index} />
+      ))}
     </View>
   );
 };
