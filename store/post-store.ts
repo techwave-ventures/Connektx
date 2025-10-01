@@ -321,10 +321,8 @@ function mapApiPostToPost(apiPost: any) {
   // Overlay persisted like state if available to avoid post-refresh flip
   try {
     const { useLikeStore } = require('./like-store');
-    const persistedLiked = useLikeStore.getState().isLiked(mappedPost.id);
-    if (persistedLiked) {
-      mappedPost.isLiked = true;
-    }
+    const persistedLiked = !!useLikeStore.getState().isLiked(mappedPost.id);
+    mappedPost.isLiked = persistedLiked;
   } catch {}
 
   return mappedPost;
@@ -492,12 +490,23 @@ export const usePostStore = create<PostState>((set, get) => ({
         const newPostMeta = { ...state.postMeta };
         finalPosts.forEach((post: any) => {
           if (post?.id) {
-            newPostMeta[post.id] = {
-              likes: typeof post.likes === 'number' ? post.likes : (post.likesCount || 0),
-              isLiked: !!post.isLiked,
-              bookmarked: !!post.isBookmarked,
-              comments: typeof post.comments === 'number' ? post.comments : 0
-            };
+            try {
+              const { useLikeStore } = require('./like-store');
+              const persisted = !!useLikeStore.getState().isLiked(post.id);
+              newPostMeta[post.id] = {
+                likes: typeof post.likes === 'number' ? post.likes : (post.likesCount || 0),
+                isLiked: persisted,
+                bookmarked: !!post.isBookmarked,
+                comments: typeof post.comments === 'number' ? post.comments : 0
+              };
+            } catch {
+              newPostMeta[post.id] = {
+                likes: typeof post.likes === 'number' ? post.likes : (post.likesCount || 0),
+                isLiked: !!post.isLiked,
+                bookmarked: !!post.isBookmarked,
+                comments: typeof post.comments === 'number' ? post.comments : 0
+              };
+            }
           }
         });
         

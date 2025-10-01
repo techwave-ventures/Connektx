@@ -99,7 +99,6 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   const formattedDate = useMemo(() => new Date(post.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), [post.createdAt]);
 
   const persistedLiked = useLikeStore(s => s.isLiked(post.id));
-  const setPersistedLiked = useLikeStore(s => s.setLiked);
   const hasHydrated = (useLikeStore as any)?.persist?.hasHydrated?.() ?? false;
   const meta = usePostStore(s => s.getPostMeta(post.id));
   // Prefer centralized registry if available; otherwise fall back to persisted or server flag
@@ -118,13 +117,6 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
     return base;
   }, [meta, post.likes, (post as any).likesCount, post.isLiked, effectiveIsLiked, hasHydrated]);
 
-  // If server says liked but persisted store doesn't have it yet (e.g., first run after feature added),
-  // promote server truth into persistence to avoid flipping after hydration
-  useEffect(() => {
-    if (hasHydrated && post.isLiked && !persistedLiked) {
-      try { setPersistedLiked(post.id, true); } catch {}
-    }
-  }, [hasHydrated, persistedLiked, post.id, post.isLiked, setPersistedLiked]);
 
   const handleLike = useCallback(() => {
     (effectiveIsLiked ? unlikePost : likePost)(post.id);
@@ -136,7 +128,7 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
       try {
         (usePostStore.getState().updatePostMeta as any)?.(post.id, {
           likes: typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0,
-          isLiked: !!post.isLiked,
+          isLiked: hasHydrated ? persistedLiked : !!post.isLiked,
           bookmarked: !!post.isBookmarked,
           comments: typeof post.comments === 'number' ? post.comments : 0,
         });
@@ -145,6 +137,15 @@ const PostCard: React.FC<PostCardProps> = memo(({ post, onPress, variant = 'defa
   // Intentionally only run on mount / post identity change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
+
+  // Reconcile meta.isLiked with persisted state after hydration
+  useEffect(() => {
+    if (hasHydrated && meta && meta.isLiked !== persistedLiked) {
+      try {
+        (usePostStore.getState().updatePostMeta as any)?.(post.id, { isLiked: persistedLiked });
+      } catch {}
+    }
+  }, [hasHydrated, persistedLiked, meta?.isLiked, post.id]);
 
   const handleBookmark = useCallback(() => {
     bookmarkPost(post.id);

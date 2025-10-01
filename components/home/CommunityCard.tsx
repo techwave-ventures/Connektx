@@ -146,7 +146,7 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
       try {
         (usePostStore.getState().updatePostMeta as any)?.(post.id, {
           likes: typeof post.likes === 'number' ? post.likes : (post as any).likesCount || 0,
-          isLiked: !!post.isLiked,
+          isLiked: hasHydrated ? persistedLiked : !!post.isLiked,
           bookmarked: !!post.isBookmarked,
           comments: typeof post.comments === 'number' ? post.comments : 0,
         });
@@ -155,6 +155,15 @@ const CommunityCard: React.FC<CommunityCardProps> = memo(({ post, onPress }) => 
   // Only on mount / post identity change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
+
+  // Reconcile meta.isLiked with persisted state after hydration
+  useEffect(() => {
+    if (hasHydrated && meta && meta.isLiked !== persistedLiked) {
+      try {
+        (usePostStore.getState().updatePostMeta as any)?.(post.id, { isLiked: persistedLiked });
+      } catch {}
+    }
+  }, [hasHydrated, persistedLiked, meta?.isLiked, post.id]);
   
   const handleComment = useCallback(() => {
     // Pass post data to avoid loading screen (similar to notifications)
