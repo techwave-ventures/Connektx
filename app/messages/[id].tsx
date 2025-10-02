@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { ArrowLeft, Send, MoreVertical, X, Check } from 'lucide-react-native';
 import Avatar from '@/components/ui/Avatar';
@@ -62,10 +63,25 @@ export default function ConversationScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   
+  // Track keyboard height (Android) to avoid leftover bottom space after hide
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Track container height to detect if OS performs adjustResize (then we avoid extra padding)
+  const containerBaseHeightRef = useRef<number | null>(null);
+  const [currentContainerHeight, setCurrentContainerHeight] = useState<number | null>(null);
+
+  // Glitch-free Android padding control
+  const keyboardHeightRef = useRef(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [awaitingResizeCheck, setAwaitingResizeCheck] = useState(false);
+  const [androidBottomPadding, setAndroidBottomPadding] = useState(0);
+  const resizeCheckTimeoutRef = useRef<any>(null);
+  
   const [headerInfo, setHeaderInfo] = useState({
     name: initialOtherUserName || 'Direct Message',
     avatar: initialOtherUserAvatar,
   });
+
+  const insets = useSafeAreaInsets();
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   
@@ -76,6 +92,63 @@ export default function ConversationScreen() {
     // console.log('[DB] Initializing database...');
     initDatabase();
   }, []);
+
+  // Mirror CommentsModal: listen for keyboard show/hide to manage bottom space (Android)
+  // Avoid flicker: delay Android padding decision until we know if OS resized the window
+  useEffect(() => {
+    const onShow = (e: any) => {
+      const h = e?.endCoordinates?.height || 0;
+      setKeyboardHeight(h);
+      keyboardHeightRef.current = h;
+      setIsKeyboardVisible(true);
+      if (resizeCheckTimeoutRef.current) {
+        clearTimeout(resizeCheckTimeoutRef.current);
+      }
+      setAwaitingResizeCheck(true);
+      // After a short delay, if OS did not resize, apply padding once
+      resizeCheckTimeoutRef.current = setTimeout(() => {
+        const base = containerBaseHeightRef.current;
+        const curr = currentContainerHeight;
+        const resizedByOS = h > 0 && base !== null && curr !== null && curr < base - 10;
+        if (!resizedByOS) {
+          setAndroidBottomPadding(Math.max(keyboardHeightRef.current - insets.bottom, 0));
+        } else {
+          setAndroidBottomPadding(0);
+        }
+        setAwaitingResizeCheck(false);
+        resizeCheckTimeoutRef.current = null;
+      }, 120);
+    };
+
+    const onHide = () => {
+      setKeyboardHeight(0);
+      keyboardHeightRef.current = 0;
+      setIsKeyboardVisible(false);
+      setAwaitingResizeCheck(false);
+      setAndroidBottomPadding(0);
+      if (resizeCheckTimeoutRef.current) {
+        clearTimeout(resizeCheckTimeoutRef.current);
+        resizeCheckTimeoutRef.current = null;
+      }
+    };
+
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      onShow
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      onHide
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      if (resizeCheckTimeoutRef.current) {
+        clearTimeout(resizeCheckTimeoutRef.current);
+        resizeCheckTimeoutRef.current = null;
+      }
+    };
+  }, [currentContainerHeight, insets.bottom]);
 
   // Mark conversation as read when the screen is focused
   useFocusEffect(
@@ -402,65 +475,75 @@ export default function ConversationScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={100}
-      >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderChatMessage}
-          contentContainerStyle={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            !isLoading ? (
-              <View style={styles.emptyMessagesContainer}>
-                <Text style={styles.emptyMessagesText}>Start your conversation!</Text>
-                <Text style={styles.emptyMessagesSubtext}>Send a message to begin chatting.</Text>
-              </View>
-            ) : null // Show nothing while loading in the background
-          }
-        />
-
-        {/* {showRequestFooter ? (
-          <View style={styles.requestFooter}>
-            <Text style={styles.requestFooterText}>{headerInfo.name} wants to connect with you.</Text>
-            <View style={styles.requestButtons}>
-              <TouchableOpacity style={[styles.requestButton, styles.rejectButton]} onPress={handleRejectRequest}>
-                <X size={20} color={Colors.dark.text} />
-                <Text style={styles.requestButtonText}>Reject</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.requestButton, styles.acceptButton]} onPress={handleAcceptRequest}>
-                <Check size={20} color={'white'} />
-                <Text style={[styles.requestButtonText, { color: 'white' }]}>Accept</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              placeholderTextColor={Colors.dark.subtext}
-              value={messageText}
-              onChangeText={setMessageText}
-              multiline
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, (!messageText.trim() || isSending) && styles.sendButtonDisabled]}
-              onPress={handleSendMessage}
-              disabled={!messageText.trim() || isSending}
-            >
-              <Send size={20} color={(messageText.trim() && !isSending) ? 'white' : Colors.dark.subtext} />
-            </TouchableOpacity>
-          </View>
-        )}
-        */}
-
-        {renderFooter()}
-      </KeyboardAvoidingView>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView
+          behavior={'padding'}
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={100}
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderChatMessage}
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyMessagesContainer}>
+                  <Text style={styles.emptyMessagesText}>Start your conversation!</Text>
+                  <Text style={styles.emptyMessagesSubtext}>Send a message to begin chatting.</Text>
+                </View>
+              ) : null
+            }
+          />
+          {renderFooter()}
+        </KeyboardAvoidingView>
+      ) : (
+        <View
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            setCurrentContainerHeight(h);
+            if (keyboardHeight === 0 && (containerBaseHeightRef.current === null || containerBaseHeightRef.current < h)) {
+              containerBaseHeightRef.current = h;
+            }
+            // If we're waiting to decide and we observe a shrink, conclude no extra padding needed
+            if (Platform.OS === 'android' && isKeyboardVisible && awaitingResizeCheck) {
+              const base = containerBaseHeightRef.current;
+              if (base !== null && h < base - 10) {
+                setAndroidBottomPadding(0);
+                setAwaitingResizeCheck(false);
+                if (resizeCheckTimeoutRef.current) {
+                  clearTimeout(resizeCheckTimeoutRef.current);
+                  resizeCheckTimeoutRef.current = null;
+                }
+              }
+            }
+          }}
+          style={[
+            styles.keyboardAvoidingView,
+            { paddingBottom: Platform.OS === 'android' ? (awaitingResizeCheck ? 0 : androidBottomPadding) : 0 }
+          ]}
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderChatMessage}
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyMessagesContainer}>
+                  <Text style={styles.emptyMessagesText}>Start your conversation!</Text>
+                  <Text style={styles.emptyMessagesSubtext}>Send a message to begin chatting.</Text>
+                </View>
+              ) : null
+            }
+          />
+          {renderFooter()}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
