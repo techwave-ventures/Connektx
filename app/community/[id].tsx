@@ -1096,16 +1096,16 @@ export default function CommunityDetailScreen() {
           <View style={styles.tabContent}>
           <View style={styles.feedContainer}>
             {/* Community Highlights */}
-            {community.announcements.length > 0 && (
+            {Array.isArray(community.announcements) && community.announcements.length > 0 && (
               <View style={styles.highlightsSection}>
                 <Text style={styles.highlightsTitle}>Community highlights</Text>
-                {community.announcements.slice(0, 1).map(announcement => (
+                {(community.announcements || []).slice(0, 1).map(announcement => (
                   <TouchableOpacity key={announcement.id} style={styles.highlightCard}>
                     <Text style={styles.highlightTitle}>{announcement.title}</Text>
                     <Text style={styles.highlightSubtitle}>
-                      {announcement.content.length > 100 
+                      {announcement.content && announcement.content.length > 100 
                         ? announcement.content.substring(0, 100) + '...'
-                        : announcement.content
+                        : (announcement.content || '')
                       }
                     </Text>
                     <Badge label="Announcement" variant="primary" size="small" />
@@ -1996,7 +1996,7 @@ export default function CommunityDetailScreen() {
                   </TouchableOpacity>
                   <View style={styles.qaListItemStat}>
                     <MessageSquare size={18} color={Colors.dark.text} />
-                    <Text style={styles.qaListItemStatText}>{question.comments.length}</Text>
+                    <Text style={styles.qaListItemStatText}>{Array.isArray(question?.comments) ? question.comments.length : (typeof (question as any).commentsCount === 'number' ? (question as any).commentsCount : 0)}</Text>
                   </View>
                   <View style={styles.qaListItemStat}>
                     <Share size={14} color={Colors.dark.subtext} />

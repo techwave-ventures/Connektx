@@ -135,22 +135,7 @@ export default function CommunitySettingsScreen() {
     }
   }, [community]);
 
-  if (!community || !canManage) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Shield size={48} color={Colors.dark.error} />
-          <Text style={styles.errorText}>
-            {!community ? 'Community not found' : 'You don\'t have permission to manage this community'}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  const analytics = getCommunityAnalytics(id!);
-
-  // Fetch community members from API
+  // Fetch community members from API (must be declared before any early return to keep hooks order stable)
   const fetchCommunityMembers = async () => {
     console.log('🚀 [Settings] Fetching community members...');
     if (!id || !token) {
@@ -214,6 +199,21 @@ export default function CommunitySettingsScreen() {
     }
   }, [activeTab, id, token]);
 
+  if (!community || !canManage) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Shield size={48} color={Colors.dark.error} />
+          <Text style={styles.errorText}>
+            {!community ? 'Community not found' : 'You don\'t have permission to manage this community'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const analytics = getCommunityAnalytics(id!);
+
   // Helper functions for members display
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -250,7 +250,8 @@ export default function CommunitySettingsScreen() {
   };
 
   const handleSaveGeneral = () => {
-    updateCommunity(id!, formData);
+    // Pass token as the first argument as expected by the store API
+    updateCommunity(token!, id!, formData);
     Alert.alert('Success', 'Community details updated successfully');
   };
 
@@ -261,7 +262,7 @@ export default function CommunitySettingsScreen() {
 
   const handleSaveVisuals = () => {
     // Update community with new visual elements
-    updateCommunity(id!, {
+    updateCommunity(token!, id!, {
       ...formData,
       logo: logoUrl,
       coverImage: bannerUrl,
@@ -350,9 +351,9 @@ export default function CommunitySettingsScreen() {
     switch (action) {
       case 'promote':
         if (memberRole === 'member') {
-          assignRole(id!, memberId, 'moderator', user!.id);
+          assignRole(token!, id!, memberId, 'moderator');
         } else if (memberRole === 'moderator') {
-          assignRole(id!, memberId, 'admin', user!.id);
+          assignRole(token!, id!, memberId, 'admin');
         }
         break;
       case 'demote':
@@ -366,7 +367,7 @@ export default function CommunitySettingsScreen() {
           'Are you sure you want to remove this member?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => removeMember(id!, memberId, user!.id) }
+            { text: 'Remove', style: 'destructive', onPress: () => removeMember(token!, id!, memberId) }
           ]
         );
         break;
@@ -821,10 +822,10 @@ export default function CommunitySettingsScreen() {
             <Text style={styles.sectionTitle}>Members ({members.length})</Text>
             
             {/* Join Requests */}
-            {community.joinRequests.length > 0 && (
+            {Array.isArray(community.joinRequests) && community.joinRequests.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.subsectionTitle}>Join Requests ({community.joinRequests.length})</Text>
-                {community.joinRequests.filter(r => r.status === 'pending').map((request) => (
+                {(community.joinRequests || []).filter(r => r.status === 'pending').map((request) => (
                   <View key={request.id} style={styles.requestItem}>
                     <View style={styles.requestInfo}>
                       <Image 
@@ -839,13 +840,13 @@ export default function CommunitySettingsScreen() {
                     <View style={styles.requestActions}>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.approveButton]}
-                        onPress={() => approveJoinRequest(id!, request.id, user!.id)}
+                        onPress={() => approveJoinRequest(token!, request.id)}
                       >
                         <Ionicons name="checkmark" size={16} color="white" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.rejectButton]}
-                        onPress={() => rejectJoinRequest(id!, request.id, user!.id)}
+                        onPress={() => rejectJoinRequest(token!, request.id)}
                       >
                         <Ionicons name="close" size={16} color="white" />
                       </TouchableOpacity>
@@ -929,10 +930,10 @@ export default function CommunitySettingsScreen() {
             )}
 
             {/* Banned Users */}
-            {community.bannedUsers.length > 0 && (
+            {Array.isArray(community.bannedUsers) && community.bannedUsers.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.subsectionTitle}>Banned Users ({community.bannedUsers.length})</Text>
-                {community.bannedUsers.map((userId) => (
+                {(community.bannedUsers || []).map((userId) => (
                   <View key={userId} style={styles.memberItem}>
                     <View style={styles.memberInfo}>
                       <Image 

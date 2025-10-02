@@ -507,13 +507,49 @@ export const useCommunityStore = create<CommunityState>()(
           set({ isLoading: true, error: null });
           
           const response = await CommunityAPI.updateCommunity(token, id, communityData);
+
+          // Be defensive about response shape; some backends return the updated object at different keys
+          const incoming: any = (response as any)?.community 
+            || (response as any)?.body 
+            || (response as any)?.data 
+            || response;
           
           set(state => ({
-            communities: state.communities.map(community => 
-              community.id === id ? response.community : community
-            ),
+            communities: state.communities.map(prev => {
+              if (prev.id !== id) return prev;
+              // Merge incoming fields over the previous community to preserve required shape
+              const merged: any = { ...prev, ...(incoming || {}) };
+              // Ensure stable id for lookups
+              merged.id = prev.id || incoming?.id || incoming?._id || id;
+              // Normalize tags and arrays if present; otherwise keep previous values
+              if (incoming && 'tags' in incoming) merged.tags = ensureTagsArray(incoming.tags);
+              if (incoming && 'members' in incoming) merged.members = Array.isArray(incoming.members) ? incoming.members : prev.members;
+              if (incoming && 'admins' in incoming) merged.admins = Array.isArray(incoming.admins) ? incoming.admins : prev.admins;
+              if (incoming && 'moderators' in incoming) merged.moderators = Array.isArray(incoming.moderators) ? incoming.moderators : prev.moderators;
+              if (incoming && 'bannedUsers' in incoming) merged.bannedUsers = Array.isArray(incoming.bannedUsers) ? incoming.bannedUsers : prev.bannedUsers;
+              // Merge settings object if provided
+              if (incoming && typeof incoming.settings === 'object') {
+                merged.settings = { ...prev.settings, ...incoming.settings };
+              }
+              // Keep posts/resources/announcements unless backend provided arrays
+              if (incoming && 'posts' in incoming) merged.posts = Array.isArray(incoming.posts) ? incoming.posts : prev.posts;
+              if (incoming && 'resources' in incoming) merged.resources = Array.isArray(incoming.resources) ? incoming.resources : prev.resources;
+              if (incoming && 'announcements' in incoming) merged.announcements = Array.isArray(incoming.announcements) ? incoming.announcements : prev.announcements;
+              if (incoming && 'joinRequests' in incoming) merged.joinRequests = Array.isArray(incoming.joinRequests) ? incoming.joinRequests : prev.joinRequests;
+              // Owner mapping fallback
+              merged.owner = merged.owner || merged.createdBy || prev.owner || prev.createdBy;
+              return merged as any;
+            }),
             activeCommunity: state.activeCommunity?.id === id 
-              ? response.community 
+              ? (() => {
+                  const prev = state.activeCommunity as any;
+                  const merged: any = { ...prev, ...(incoming || {}) };
+                  merged.id = prev.id || incoming?.id || incoming?._id || id;
+                  if (incoming && typeof incoming.settings === 'object') {
+                    merged.settings = { ...prev.settings, ...incoming.settings };
+                  }
+                  return merged;
+                })()
               : state.activeCommunity,
             isLoading: false
           }));
@@ -1619,12 +1655,16 @@ export const useCommunityStore = create<CommunityState>()(
           };
         }
 
-        const totalComments = community.posts.reduce((total, post) => total + post.comments.length, 0);
-        const totalLikes = community.posts.reduce((total, post) => total + post.likes.length, 0);
+        const totalComments = Array.isArray(community.posts)
+          ? community.posts.reduce((total, post: any) => total + (Array.isArray(post?.comments) ? post.comments.length : 0), 0)
+          : 0;
+        const totalLikes = Array.isArray(community.posts)
+          ? community.posts.reduce((total, post: any) => total + (Array.isArray(post?.likes) ? post.likes.length : (typeof post?.likesCount === 'number' ? post.likesCount : 0)), 0)
+          : 0;
         
         // Calculate recent joins (last 7 days)
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const recentJoins = community.members.length; // Simplified - in real app would check join dates
+        const recentJoins = Array.isArray(community.members) ? community.members.length : 0; // Simplified - in real app would check join dates
         
         // Simple engagement rate calculation
         const engagementRate = community.memberCount > 0 
@@ -1633,10 +1673,10 @@ export const useCommunityStore = create<CommunityState>()(
 
         return {
           totalMembers: community.memberCount,
-          totalPosts: community.posts.length,
+          totalPosts: Array.isArray(community.posts) ? community.posts.length : 0,
           totalComments,
           totalLikes,
-          totalResources: community.resources.length,
+          totalResources: Array.isArray(community.resources) ? community.resources.length : 0,
           recentJoins,
           engagementRate: Math.round(engagementRate * 100) / 100
         };
