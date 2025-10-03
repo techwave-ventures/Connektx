@@ -381,6 +381,30 @@ export default function ConversationScreen() {
   }
 
   const renderFooter = () => {
+    // While loading conversation status or before it's known, show a disabled input bar
+    // This keeps UI stable without changing functionality (sending stays disabled)
+    if (isLoading || conversationStatus === null) {
+      return (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Type a message..."
+            placeholderTextColor={Colors.dark.subtext}
+            value={messageText}
+            onChangeText={setMessageText}
+            editable={false}
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, styles.sendButtonDisabled]}
+            disabled
+          >
+            <Send size={20} color={Colors.dark.subtext} />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     // Scenario 1: The user has received a request from someone else.
     const showRequestReceivedFooter = conversationStatus === 'pending' && initiatedBy !== user?.id;
     if (showRequestReceivedFooter) {
