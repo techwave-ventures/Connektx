@@ -28,18 +28,21 @@ import { getPostById } from '@/api/post';
 import { getUserById } from '@/api/user';
 import { useNewsStore } from '@/store/news-store';
 import { useShowcaseStore } from '@/store/showcase-store';
+import { insertDateSeparators } from '@/utils/dateUtils';
+import DateSeparator from '@/components/messages/DateSeparator';
 
 // Main Chat Message Interface
 interface ChatMessage {
   id: string;
-  content: string;
+  content?: string;
   createdAt: string;
-  sender: {
+  sender?: {
     id:string;
     name: string;
     avatar?: string;
   };
-  type?: 'normal' | 'system';
+  type?: 'normal' | 'system' | 'dateSeparator';
+  dateText?: string; // For date separators
   sharedPost?: any;
   sharedNews?: any;
   sharedShowcase?: any;
@@ -354,7 +357,9 @@ export default function ConversationScreen() {
         // console.log([DB] Loading local messages for conversationId: ${conversationId});
         const localMessages = await getLocalMessages(conversationId);
         if (localMessages.length > 0) {
-            setMessages(localMessages);
+            // Add date separators to local messages
+            const messagesWithDates = insertDateSeparators(localMessages);
+            setMessages(messagesWithDates);
             // console.log([DB] Loaded ${localMessages.length} messages from local cache.);
         }
 
@@ -399,7 +404,10 @@ export default function ConversationScreen() {
 
             // Hydrate shared cards for combined view (so cards show immediately)
             const hydratedCombined = await hydrateMessages(combinedMessages, rawById);
-            setMessages(hydratedCombined);
+            
+            // Add date separators to the combined messages
+            const messagesWithDates = insertDateSeparators(hydratedCombined);
+            setMessages(messagesWithDates);
             
             // With inverted FlatList, messages automatically appear at correct position
             if (!hasInitiallyPositioned.current) {
@@ -459,7 +467,13 @@ export default function ConversationScreen() {
           setMessages(prev => {
             // Also save to local DB
             saveMessages(conversationId, [hydrated]);
-            return [...prev, hydrated];
+            
+            // Filter out date separators from previous messages, add new message, then re-add separators
+            const previousMessages = prev.filter(m => m.type !== 'dateSeparator');
+            const updatedMessages = [...previousMessages, hydrated];
+            
+            // Add date separators to the updated list
+            return insertDateSeparators(updatedMessages);
           });
         }
       };
@@ -537,7 +551,13 @@ export default function ConversationScreen() {
   };
   
   const renderChatMessage = ({ item, index }: { item: ChatMessage; index: number }) => {
-    const sentByMe = item.sender.id === user?.id;
+    // Handle date separator items
+    if (item.type === 'dateSeparator') {
+      return <DateSeparator dateText={item.dateText || ''} />;
+    }
+
+    // Regular message rendering
+    const sentByMe = item.sender?.id === user?.id;
     const hasSharedContent = item.sharedPost || item.sharedNews || item.sharedShowcase || item.sharedUser;
     const isNearEnd = index >= Math.max(0, messages.length - 2);
 
@@ -713,11 +733,23 @@ export default function ConversationScreen() {
             onContentSizeChange={handleContentSizeChange}
             scrollEventThrottle={16}
             inverted
-            getItemLayout={(data, index) => ({
-              length: 100, // Approximate average message height
-              offset: 100 * index,
-              index,
-            })}
+            getItemLayout={(data, index) => {
+              const item = data?.[index];
+              const itemHeight = item?.type === 'dateSeparator' ? 60 : 100; // Date separators are shorter
+              let offset = 0;
+              
+              // Calculate offset by summing heights of previous items
+              for (let i = 0; i < index; i++) {
+                const prevItem = data?.[i];
+                offset += prevItem?.type === 'dateSeparator' ? 60 : 100;
+              }
+              
+              return {
+                length: itemHeight,
+                offset,
+                index,
+              };
+            }}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
@@ -767,11 +799,23 @@ export default function ConversationScreen() {
             onContentSizeChange={handleContentSizeChange}
             scrollEventThrottle={16}
             inverted
-            getItemLayout={(data, index) => ({
-              length: 100, // Approximate average message height
-              offset: 100 * index,
-              index,
-            })}
+            getItemLayout={(data, index) => {
+              const item = data?.[index];
+              const itemHeight = item?.type === 'dateSeparator' ? 60 : 100; // Date separators are shorter
+              let offset = 0;
+              
+              // Calculate offset by summing heights of previous items
+              for (let i = 0; i < index; i++) {
+                const prevItem = data?.[i];
+                offset += prevItem?.type === 'dateSeparator' ? 60 : 100;
+              }
+              
+              return {
+                length: itemHeight,
+                offset,
+                index,
+              };
+            }}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
