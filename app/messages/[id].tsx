@@ -98,17 +98,37 @@ export default function ConversationScreen() {
   // Keep view anchored to bottom when content height changes (e.g., cards/images hydrate)
   const isAtBottomRef = useRef(true);
   const initialStickRef = useRef(true);
-  const scrollToBottom = (animated: boolean = true) => flatListRef.current?.scrollToEnd({ animated });
+  const hasInitiallyPositioned = useRef(false); // Track if we've done initial positioning
+  
+  const scrollToBottom = (animated: boolean = true) => {
+    // With inverted FlatList, scroll to index 0 (newest message at top)
+    if (messages.length > 0 && flatListRef.current) {
+      try {
+        flatListRef.current.scrollToIndex({ index: 0, animated, viewPosition: 0 });
+      } catch (error) {
+        // Fallback to scrollToEnd if scrollToIndex fails
+        flatListRef.current.scrollToEnd({ animated });
+      }
+    }
+  };
+  
   const handleScroll = (e: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent || {};
     if (!layoutMeasurement || !contentOffset || !contentSize) return;
-    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y);
-    isAtBottomRef.current = distanceFromBottom < 80; // px threshold
+    // With inverted list, check if we're at the top (newest messages)
+    isAtBottomRef.current = contentOffset.y < 80; // px threshold from top
   };
+  
   const handleContentSizeChange = () => {
     if (isAtBottomRef.current || initialStickRef.current) {
-      requestAnimationFrame(() => scrollToBottom(false));
-      initialStickRef.current = false;
+      // For initial positioning, use no animation to avoid visible scrolling
+      const useAnimation = hasInitiallyPositioned.current;
+      requestAnimationFrame(() => scrollToBottom(useAnimation));
+      
+      if (initialStickRef.current) {
+        initialStickRef.current = false;
+        hasInitiallyPositioned.current = true;
+      }
     }
   };
 
@@ -125,9 +145,14 @@ export default function ConversationScreen() {
 
   useEffect(() => {
     if (isAtBottomRef.current || initialStickRef.current) {
-      // Defer to end of frame so layout is fresh
-      requestAnimationFrame(() => scrollToBottom(false));
-      initialStickRef.current = false;
+      // For hydration updates, use animation only after initial positioning
+      const useAnimation = hasInitiallyPositioned.current;
+      requestAnimationFrame(() => scrollToBottom(useAnimation));
+      
+      if (initialStickRef.current) {
+        initialStickRef.current = false;
+        hasInitiallyPositioned.current = true;
+      }
     }
   }, [hydrationSig]);
 
@@ -375,8 +400,11 @@ export default function ConversationScreen() {
             // Hydrate shared cards for combined view (so cards show immediately)
             const hydratedCombined = await hydrateMessages(combinedMessages, rawById);
             setMessages(hydratedCombined);
-            // Ensure we stay pinned to bottom after hydration-induced height growth
-            scrollToBottom(false);
+            
+            // With inverted FlatList, messages automatically appear at correct position
+            if (!hasInitiallyPositioned.current) {
+              hasInitiallyPositioned.current = true;
+            }
 
             // --- 4. Save only newly fetched messages (hydrated) to DB ---
             if (newUniqueMessages.length > 0) {
@@ -448,7 +476,18 @@ export default function ConversationScreen() {
   useEffect(() => {
     if (messages.length > 0) {
       // console.log('[UI] Scrolling to end.');
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      // Only animate scroll after initial positioning is done
+      const shouldAnimate = hasInitiallyPositioned.current;
+      setTimeout(() => {
+        if (flatListRef.current && messages.length > 0) {
+          try {
+            flatListRef.current.scrollToIndex({ index: 0, animated: shouldAnimate, viewPosition: 0 });
+          } catch (error) {
+            // Fallback to scrollToEnd if scrollToIndex fails
+            flatListRef.current.scrollToEnd({ animated: shouldAnimate });
+          }
+        }
+      }, 100);
     }
   }, [messages.length]);
 
@@ -665,7 +704,7 @@ export default function ConversationScreen() {
         >
           <FlatList
             ref={flatListRef}
-            data={messages}
+            data={[...messages].reverse()}
             keyExtractor={(item) => item.id}
             renderItem={renderChatMessage}
             contentContainerStyle={styles.messagesList}
@@ -673,6 +712,12 @@ export default function ConversationScreen() {
             onScroll={handleScroll}
             onContentSizeChange={handleContentSizeChange}
             scrollEventThrottle={16}
+            inverted
+            getItemLayout={(data, index) => ({
+              length: 100, // Approximate average message height
+              offset: 100 * index,
+              index,
+            })}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
@@ -713,7 +758,7 @@ export default function ConversationScreen() {
         >
           <FlatList
             ref={flatListRef}
-            data={messages}
+            data={[...messages].reverse()}
             keyExtractor={(item) => item.id}
             renderItem={renderChatMessage}
             contentContainerStyle={styles.messagesList}
@@ -721,6 +766,12 @@ export default function ConversationScreen() {
             onScroll={handleScroll}
             onContentSizeChange={handleContentSizeChange}
             scrollEventThrottle={16}
+            inverted
+            getItemLayout={(data, index) => ({
+              length: 100, // Approximate average message height
+              offset: 100 * index,
+              index,
+            })}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
