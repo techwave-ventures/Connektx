@@ -94,6 +94,52 @@ export default function ConversationScreen() {
   const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
+
+  // Keep view anchored to bottom when content height changes (e.g., cards/images hydrate)
+  const isAtBottomRef = useRef(true);
+  const initialStickRef = useRef(true);
+  const scrollToBottom = (animated: boolean = true) => flatListRef.current?.scrollToEnd({ animated });
+  const handleScroll = (e: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent || {};
+    if (!layoutMeasurement || !contentOffset || !contentSize) return;
+    const distanceFromBottom = contentSize.height - (layoutMeasurement.height + contentOffset.y);
+    isAtBottomRef.current = distanceFromBottom < 80; // px threshold
+  };
+  const handleContentSizeChange = () => {
+    if (isAtBottomRef.current || initialStickRef.current) {
+      requestAnimationFrame(() => scrollToBottom(false));
+      initialStickRef.current = false;
+    }
+  };
+
+  // Re-anchor to bottom when messages hydrate shared cards without changing length
+  const hydrationSig = React.useMemo(() => {
+    try {
+      return messages
+        .map(m => `${m.id}:${m.sharedPost?1:0}${m.sharedNews?1:0}${m.sharedShowcase?1:0}${m.sharedUser?1:0}`)
+        .join('|');
+    } catch {
+      return String(messages.length);
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (isAtBottomRef.current || initialStickRef.current) {
+      // Defer to end of frame so layout is fresh
+      requestAnimationFrame(() => scrollToBottom(false));
+      initialStickRef.current = false;
+    }
+  }, [hydrationSig]);
+
+  // Throttled onLayout scroll for last items to counter per-item height growth
+  const lastLayoutScrollTsRef = useRef(0);
+  const onItemLayoutNearEnd = () => {
+    const now = Date.now();
+    if (!isAtBottomRef.current) return;
+    if (now - lastLayoutScrollTsRef.current < 200) return; // throttle
+    lastLayoutScrollTsRef.current = now;
+    requestAnimationFrame(() => scrollToBottom(false));
+  };
   
   // console.log('[LOG] ConversationScreen mounted with params:', params);
   
@@ -329,6 +375,8 @@ export default function ConversationScreen() {
             // Hydrate shared cards for combined view (so cards show immediately)
             const hydratedCombined = await hydrateMessages(combinedMessages, rawById);
             setMessages(hydratedCombined);
+            // Ensure we stay pinned to bottom after hydration-induced height growth
+            scrollToBottom(false);
 
             // --- 4. Save only newly fetched messages (hydrated) to DB ---
             if (newUniqueMessages.length > 0) {
@@ -449,12 +497,13 @@ export default function ConversationScreen() {
     }
   };
   
-  const renderChatMessage = ({ item }: { item: ChatMessage }) => {
+  const renderChatMessage = ({ item, index }: { item: ChatMessage; index: number }) => {
     const sentByMe = item.sender.id === user?.id;
     const hasSharedContent = item.sharedPost || item.sharedNews || item.sharedShowcase || item.sharedUser;
+    const isNearEnd = index >= Math.max(0, messages.length - 2);
 
     return (
-      <View style={styles.messageContainer}>
+      <View style={styles.messageContainer} onLayout={isNearEnd ? onItemLayoutNearEnd : undefined}>
         {hasSharedContent ? (
           <View style={[styles.sharedContentContainer, sentByMe ? styles.sentBubble : styles.receivedBubble]}>
             {item.content ? <Text style={[styles.sharedContentText, sentByMe ? styles.sentMessageText : styles.receivedMessageText]}>{item.content}</Text> : null}
@@ -621,6 +670,10 @@ export default function ConversationScreen() {
             renderItem={renderChatMessage}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            onContentSizeChange={handleContentSizeChange}
+            scrollEventThrottle={16}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
                 <View style={styles.emptyMessagesContainer}>
@@ -665,6 +718,10 @@ export default function ConversationScreen() {
             renderItem={renderChatMessage}
             contentContainerStyle={styles.messagesList}
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            onContentSizeChange={handleContentSizeChange}
+            scrollEventThrottle={16}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             ListEmptyComponent={
               !isLoading ? (
                 <View style={styles.emptyMessagesContainer}>
