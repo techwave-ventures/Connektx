@@ -24,6 +24,10 @@ import SharedPostCard from '@/components/messages/SharedPostCard';
 import SharedNewsCard from '@/components/messages/SharedNewsCard';
 import SharedShowcaseCard from '@/components/messages/SharedShowcaseCard';
 import SharedUserCard from '@/components/messages/SharedUserCard';
+import { getPostById } from '@/api/post';
+import { getUserById } from '@/api/user';
+import { useNewsStore } from '@/store/news-store';
+import { useShowcaseStore } from '@/store/showcase-store';
 
 // Main Chat Message Interface
 interface ChatMessage {
@@ -82,6 +86,12 @@ export default function ConversationScreen() {
   });
 
   const insets = useSafeAreaInsets();
+
+  // Access stores for optional local hydration sources
+  const newsStore = useNewsStore();
+  const showcaseStore = useShowcaseStore();
+
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://social-backend-y1rg.onrender.com';
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   
@@ -168,6 +178,96 @@ export default function ConversationScreen() {
     }, [conversationId, token])
   );
 
+  // Helper: hydrate shared cards for a single message using raw API payload when available
+  const hydrateMessageShared = async (msg: ChatMessage, raw?: any): Promise<ChatMessage> => {
+    try {
+      // If any shared object already present, keep it
+      const alreadyHydrated = msg.sharedPost || msg.sharedNews || msg.sharedShowcase || msg.sharedUser;
+      if (alreadyHydrated) return msg;
+
+      const postId = raw?.sharedPost?._id || raw?.sharedPostId || null;
+      const newsId = raw?.sharedNews?._id || raw?.sharedNewsId || null;
+      const showcaseId = raw?.sharedShowcase?._id || raw?.sharedShowcaseId || null;
+      const userId = raw?.sharedUser?._id || raw?.sharedUserId || null;
+
+      // Fetch in parallel as applicable
+      const fetches: Promise<any | null>[] = [];
+      // Posts
+      if (postId && token) {
+        fetches.push(
+          getPostById(token, postId)
+            .then((res: any) => res?.body || res?.data || res || null)
+            .catch(() => null)
+        );
+      } else {
+        fetches.push(Promise.resolve(null));
+      }
+      // News
+      if (newsId) {
+        // Try local cache first
+        const localNews = newsStore?.articles?.find?.((n: any) => n?._id === newsId || n?.id === newsId) || null;
+        if (localNews) {
+          fetches.push(Promise.resolve(localNews));
+        } else {
+          // Try API
+          fetches.push(
+            fetch(`${API_BASE_URL}/news/${newsId}`, { headers: token ? { token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' } })
+              .then(r => r.ok ? r.json() : null)
+              .then(j => (j?.body || j?.data || j || null))
+              .catch(() => null)
+          );
+        }
+      } else {
+        fetches.push(Promise.resolve(null));
+      }
+      // Showcase
+      if (showcaseId) {
+        fetches.push(
+          // Prefer store helper; it normalizes entries
+          showcaseStore.fetchEntryById(showcaseId)
+            .then((entry: any) => entry ? ({
+              _id: entry.id,
+              projectTitle: entry.title,
+              tagline: entry.tagline,
+              logo: entry.logo,
+              bannerImageUrl: Array.isArray(entry.bannerImages) && entry.bannerImages.length > 0 ? entry.bannerImages[0] : null,
+              images: entry.images || []
+            }) : null)
+            .catch(() => null)
+        );
+      } else {
+        fetches.push(Promise.resolve(null));
+      }
+      // User
+      if (userId && token) {
+        fetches.push(
+          getUserById(token, userId)
+            .then((res: any) => res?.body || res?.data || res || null)
+            .then((u: any) => u ? ({ _id: u._id || u.id, name: u.name, headline: u.headline, bio: u.bio, avatar: u.profileImage || u.avatar }) : null)
+            .catch(() => null)
+        );
+      } else {
+        fetches.push(Promise.resolve(null));
+      }
+
+      const [post, news, showcase, userObj] = await Promise.all(fetches);
+      const next: ChatMessage = { ...msg } as any;
+      if (post) next.sharedPost = post;
+      if (news) next.sharedNews = news;
+      if (showcase) next.sharedShowcase = showcase;
+      if (userObj) next.sharedUser = userObj;
+      return next;
+    } catch {
+      return msg;
+    }
+  };
+
+  // Helper: hydrate an array of messages using a map of raw API messages by id
+  const hydrateMessages = async (msgs: ChatMessage[], rawById: Map<string, any>): Promise<ChatMessage[]> => {
+    const tasks = msgs.map(m => hydrateMessageShared(m, rawById.get(m.id)));
+    return Promise.all(tasks);
+  };
+
   // Load initial messages from both local DB and remote API
   useEffect(() => {
     const loadMessages = async () => {
@@ -205,29 +305,36 @@ export default function ConversationScreen() {
                 createdAt: msg.createdAt,
                 sender: { id: msg.sender?._id, name: msg.sender?.name, avatar: msg.sender?.profileImage },
                 type: 'normal',
+                // Shared objects if backend provided them
                 sharedPost: msg.sharedPost,
                 sharedNews: msg.sharedNews,
                 sharedShowcase: msg.sharedShowcase,
                 sharedUser: msg.sharedUser,
             }));
+
+            // Build raw map for hydration (by message id)
+            const rawById = new Map<string, any>();
+            for (const rm of remoteMessagesData) {
+              if (rm && rm._id) rawById.set(rm._id, rm);
+            }
             
             // --- 3. Merge and De-duplicate ---
-            // console.log('[LOG] Merging local and remote messages...');
             const localMessageIds = new Set(localMessages.map(m => m.id));
             const newUniqueMessages = transformedRemoteMessages.filter(m => !localMessageIds.has(m.id));
             
-            if (newUniqueMessages.length > 0) {
-                // console.log([LOG] Found ${newUniqueMessages.length} new messages from API.);
-                const combinedMessages = [...localMessages, ...newUniqueMessages];
-                combinedMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-                setMessages(combinedMessages);
-                // console.log([STATE UPDATE] Total messages now: ${combinedMessages.length});
+            // Combine all for display (local first for instant UI)
+            const combinedMessages = [...localMessages, ...newUniqueMessages];
+            combinedMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-                // --- 4. Save new messages to DB ---
-                // console.log([DB] Saving ${newUniqueMessages.length} new messages to local cache.);
-                await saveMessages(conversationId, newUniqueMessages);
-            } else {
-                // console.log('[LOG] No new messages from API. Local cache is up-to-date.');
+            // Hydrate shared cards for combined view (so cards show immediately)
+            const hydratedCombined = await hydrateMessages(combinedMessages, rawById);
+            setMessages(hydratedCombined);
+
+            // --- 4. Save only newly fetched messages (hydrated) to DB ---
+            if (newUniqueMessages.length > 0) {
+              const newIds = new Set(newUniqueMessages.map(m => m.id));
+              const toSave = hydratedCombined.filter(m => newIds.has(m.id));
+              await saveMessages(conversationId, toSave);
             }
 
             // MODIFIED: Only update header info from messages for direct chats
@@ -255,10 +362,10 @@ export default function ConversationScreen() {
     const socket = socketService.getSocket();
     if (socket) {
       // console.log('[SOCKET] Setting up "newMessage" listener.');
-      const handleNewMessage = (newMessage: any) => {
+      const handleNewMessage = async (newMessage: any) => {
         // console.log('[SOCKET] Received "newMessage" event:', newMessage);
         if (newMessage.conversationId === conversationId) {
-          const transformedMessage: ChatMessage = {
+          const baseMessage: ChatMessage = {
             id: newMessage._id,
             content: newMessage.content,
             createdAt: newMessage.createdAt,
@@ -270,11 +377,13 @@ export default function ConversationScreen() {
             sharedUser: newMessage.sharedUser,
           };
 
+          // Hydrate using the raw socket payload (which may include only IDs)
+          const hydrated = await hydrateMessageShared(baseMessage, newMessage);
+
           setMessages(prev => {
-            // console.log([STATE UPDATE] Adding new message with ID: ${transformedMessage.id});
             // Also save to local DB
-            saveMessages(conversationId, [transformedMessage]);
-            return [...prev, transformedMessage];
+            saveMessages(conversationId, [hydrated]);
+            return [...prev, hydrated];
           });
         }
       };
