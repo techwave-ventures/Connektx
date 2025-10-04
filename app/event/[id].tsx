@@ -134,10 +134,18 @@ export default function EventDetailsScreen() {
   };
 
   const handleBookTicket = () => {
+    if (isRegistrationClosed) {
+      Alert.alert('Registration Closed', 'Ticket booking is closed as the event has already started.');
+      return;
+    }
     setShowBookingForm(true);
   };
 
   const handleSubmitBooking = async () => {
+    if (isRegistrationClosed) {
+      Alert.alert('Registration Closed', 'Ticket booking is closed as the event has already started.');
+      return;
+    }
     if (!name || !email) {
       Alert.alert('Missing Information', 'Please fill in all required fields.');
       return;
@@ -238,9 +246,38 @@ export default function EventDetailsScreen() {
     }
   };
 
+  // Compose a Date for the event start using local timezone
+  const getEventStartDate = (dateStr?: string, timeStr?: string): Date | null => {
+    try {
+      if (!dateStr) return null;
+      const [y, m, d] = dateStr.split('-').map((v) => parseInt(v, 10));
+      if (!y || !m || !d) return null;
+      let hh = 0;
+      let mm = 0;
+      if (timeStr && timeStr.includes(':')) {
+        const [h, min] = timeStr.split(':');
+        const hNum = parseInt(h, 10);
+        const mNum = parseInt(min, 10);
+        if (!isNaN(hNum) && !isNaN(mNum)) {
+          hh = hNum;
+          mm = mNum;
+        }
+      }
+      // Months are 0-indexed in JS Date
+      return new Date(y, m - 1, d, hh, mm, 0, 0);
+    } catch (e) {
+      console.warn('Failed to compose event start date from', dateStr, timeStr, e);
+      return null;
+    }
+  };
+
   const hasBooked = user && event.attendees.some(attendee => attendee.email === user.email);
   const isLiked = event.likes && user ? event.likes.includes(user.id) : false;
   const isBookmarked = event.bookmarks && user ? event.bookmarks.includes(user.id) : false;
+
+  // Determine if registration should be closed (once the event has started)
+  const eventStart = getEventStartDate(event.date, event.time);
+  const isRegistrationClosed = !!eventStart && new Date().getTime() >= eventStart.getTime();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -436,10 +473,11 @@ export default function EventDetailsScreen() {
                 key={ticket._id}
                 style={[
                   styles.ticketTypeCard,
-                  selectedTicketType?.id === ticket.id && styles.selectedTicketTypeCard
+                  selectedTicketType?.id === ticket.id && styles.selectedTicketTypeCard,
+                  (isRegistrationClosed || ticket.available === 0) && { opacity: 0.6 }
                 ]}
                 onPress={() => handleSelectTicket(ticket)}
-                disabled={ticket.available === 0}
+                disabled={isRegistrationClosed || ticket.available === 0}
               >
                 <View style={styles.ticketTypeInfo}>
                   <Text style={styles.ticketTypeName}>{ticket.name}</Text>
@@ -450,9 +488,11 @@ export default function EventDetailsScreen() {
 
                 <View style={styles.ticketTypeAvailability}>
                   <Text style={styles.ticketTypeAvailabilityText}>
-                    {ticket.available > 0
-                      ? `${ticket.available} available`
-                      : 'Sold Out'}
+                    {isRegistrationClosed
+                      ? 'Registration closed'
+                      : ticket.available > 0
+                        ? `${ticket.available} available`
+                        : 'Sold Out'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -510,10 +550,10 @@ export default function EventDetailsScreen() {
             </View>
           ) : (
             <Button
-              title={hasBooked ? "Already Booked" : "Book Ticket"}
+              title={isRegistrationClosed ? "Registration Closed" : (hasBooked ? "Already Booked" : "Book Ticket")}
               onPress={handleBookTicket}
-              gradient={!hasBooked}
-              disabled={hasBooked || (selectedTicketType?.available === 0)}
+              gradient={!hasBooked && !isRegistrationClosed}
+              disabled={isRegistrationClosed || hasBooked || (selectedTicketType?.available === 0)}
               style={styles.bookButton}
             />
           )}

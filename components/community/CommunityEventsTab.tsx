@@ -59,7 +59,22 @@ const CommunityEventsTab: React.FC<CommunityEventsTabProps> = ({
     
     try {
       const communityEvents = await fetchCommunityEvents(token, communityId);
-      setEvents(communityEvents);
+      // Sort newest first: prefer createdAt, fallback to composed date+time
+      const toTimestamp = (evt: Event) => {
+        // Try createdAt
+        const created = evt.createdAt ? Date.parse(evt.createdAt) : NaN;
+        if (!isNaN(created)) return created;
+        // Fallback to date + time
+        if (evt?.date) {
+          const time = (evt.time && /^\d{1,2}:\d{2}$/.test(evt.time)) ? evt.time : '00:00';
+          const ts = Date.parse(`${evt.date}T${time}`);
+          if (!isNaN(ts)) return ts;
+        }
+        // As a last resort, 0 so it ends at the bottom
+        return 0;
+      };
+      const sorted = [...communityEvents].sort((a, b) => toTimestamp(b) - toTimestamp(a));
+      setEvents(sorted);
     } catch (error) {
       console.error('Failed to load community events:', error);
       // Don't show error to user, just log it
