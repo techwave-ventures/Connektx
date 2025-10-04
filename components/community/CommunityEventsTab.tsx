@@ -149,9 +149,28 @@ const CommunityEventsTab: React.FC<CommunityEventsTabProps> = ({
   };
 
   const isEventPast = (dateString: string, timeString: string) => {
-    const eventDate = new Date(`${dateString}T${timeString}`);
-    return eventDate < new Date();
+    const safeTime = /\d{1,2}:\d{2}/.test(timeString || '') ? timeString : '00:00';
+    const eventDate = new Date(`${dateString}T${safeTime}`);
+    return eventDate.getTime() < Date.now();
   };
+
+  // Build Upcoming and Past sections from events
+  const toStartTs = (evt: Event) => {
+    const safeTime = /\d{1,2}:\d{2}/.test(evt.time || '') ? evt.time : '00:00';
+    const ts = Date.parse(`${evt.date}T${safeTime}`);
+    return isNaN(ts) ? Number.POSITIVE_INFINITY : ts;
+  };
+  const toStartTsFallback = (evt: Event) => {
+    const safeTime = /\d{1,2}:\d{2}/.test(evt.time || '') ? evt.time : '00:00';
+    const ts = Date.parse(`${evt.date}T${safeTime}`);
+    return isNaN(ts) ? 0 : ts;
+  };
+  const upcomingEvents = events
+    .filter(e => !isEventPast(e.date, e.time))
+    .sort((a, b) => toStartTs(a) - toStartTs(b));
+  const pastEvents = events
+    .filter(e => isEventPast(e.date, e.time))
+    .sort((a, b) => toStartTsFallback(b) - toStartTsFallback(a));
 
   const renderEventItem = ({ item }: { item: Event }) => {
     const isPast = isEventPast(item.date, item.time);
@@ -347,10 +366,32 @@ const CommunityEventsTab: React.FC<CommunityEventsTabProps> = ({
       )}
 
       <FlatList
-        data={events}
+        data={upcomingEvents}
         keyExtractor={(item) => item.id}
         renderItem={renderEventItem}
-        ListHeaderComponent={events.length > 0 ? renderEventsHeader : null}
+        ListHeaderComponent={(
+          <View>
+            {events.length > 0 && renderEventsHeader()}
+            <Text style={styles.sectionHeading}>Upcoming Events</Text>
+            {upcomingEvents.length === 0 && (
+              <Text style={styles.emptySectionText}>No upcoming events</Text>
+            )}
+          </View>
+        )}
+        ListFooterComponent={(
+          <View style={{ marginTop: 12 }}>
+            <Text style={styles.sectionHeading}>Past Events</Text>
+            {pastEvents.length > 0 ? (
+              <View>
+                {pastEvents.map((evt) => (
+                  <View key={evt.id}>{renderEventItem({ item: evt })}</View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptySectionText}>No past events</Text>
+            )}
+          </View>
+        )}
         contentContainerStyle={[
           styles.listContent,
           events.length === 0 && styles.emptyListContent,
@@ -390,6 +431,17 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingBottom: 100, // Space for FAB
+  },
+  sectionHeading: {
+    color: Colors.dark.text,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  emptySectionText: {
+    color: Colors.dark.subtext,
+    fontSize: 14,
+    marginBottom: 8,
   },
   emptyListContent: {
     flex: 1,
