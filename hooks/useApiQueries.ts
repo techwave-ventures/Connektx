@@ -121,12 +121,45 @@ export function useEvent(eventId: string) {
     retry: 2,
     select: (data) => {
       if (!data) return null;
-      // Normalize the event data structure
-      return {
+      // Normalize the event data structure, including ticket types mapping
+      const normalized = {
         ...data,
         id: data._id || data.id,
         _id: data._id || data.id,
+        ticketTypes: Array.isArray(data.ticketTypes)
+          ? data.ticketTypes.map((ticket: any) => {
+              // Coerce numeric fields safely
+              const priceNum = typeof ticket.price === 'number' ? ticket.price : parseFloat(ticket.price || '0');
+              // remTicket is the backend field for remaining tickets
+              const rem =
+                typeof ticket.remTicket === 'number'
+                  ? ticket.remTicket
+                  : parseInt(ticket.remTicket || ticket.available || ticket.total || '0', 10);
+              const total =
+                typeof ticket.total === 'number'
+                  ? ticket.total
+                  : (typeof ticket.remTicket === 'number' ? ticket.remTicket : parseInt(ticket.total || ticket.remTicket || '0', 10));
+              return {
+                _id: ticket._id || ticket.id,
+                id: ticket._id || ticket.id,
+                name: ticket.name,
+                price: isNaN(priceNum) ? 0 : priceNum,
+                description: ticket.description || '',
+                available: isNaN(rem) ? 0 : rem,
+                total: isNaN(total) ? (isNaN(rem) ? 0 : rem) : total,
+              };
+            })
+          : [],
+        attendees: Array.isArray(data.attendees)
+          ? data.attendees.map((attendee: any) => ({
+              name: attendee.name,
+              email: attendee.email,
+              phone: attendee.phone || '',
+              ticketType: attendee.ticketType || '',
+            }))
+          : [],
       };
+      return normalized;
     },
   });
 }
